@@ -37,6 +37,11 @@ export interface StateStore {
   commit(update: (current: AppData) => AppData): Promise<CommitResult>;
   /** Explicit user reset: overwrites storage with empty data and lifts the write block. */
   reset(): Promise<CommitResult>;
+  /**
+   * The banner's Retry. After a failed save it applies the change that failed; after a failed read it reads the
+   * stored data again (and lifts the write block if it is readable now). Never overwrites unreadable data.
+   */
+  retry(): Promise<CommitResult>;
 }
 
 function emptyData(): AppData {
@@ -61,22 +66,42 @@ export async function openStore(deps: StoreDeps): Promise<StateStore> {
   }
 
   const failure = (error: Msg): CommitResult => ({ ok: false, error });
+  /** The last change whose save failed, so Retry can apply it. */
+  let lastFailed: ((current: AppData) => AppData) | null = null;
+
+  const attempt = async (update: (current: AppData) => AppData): Promise<CommitResult> => {
+    if (blocked) return failure(READ_FAILED_MESSAGE);
+    const next = update(data);
+    try {
+      await deps.save(next);
+    } catch {
+      lastFailed = update;
+      return failure(SAVE_FAILED_MESSAGE);
+    }
+    lastFailed = null;
+    data = next;
+    return { ok: true, data: next };
+  };
 
   return {
     get: () => data,
     isBlocked: () => blocked,
     loadError: () => failedToRead,
-    commit: (update) =>
+    commit: (update) => run(() => attempt(update)),
+    retry: () =>
       run(async (): Promise<CommitResult> => {
-        if (blocked) return failure(READ_FAILED_MESSAGE);
-        const next = update(data);
-        try {
-          await deps.save(next);
-        } catch {
-          return failure(SAVE_FAILED_MESSAGE);
+        if (blocked) {
+          try {
+            data = await deps.load();
+          } catch {
+            return failure(READ_FAILED_MESSAGE);
+          }
+          blocked = false;
+          failedToRead = false;
+          return { ok: true, data };
         }
-        data = next;
-        return { ok: true, data: next };
+        if (lastFailed) return attempt(lastFailed);
+        return { ok: true, data };
       }),
     reset: () =>
       run(async (): Promise<CommitResult> => {
@@ -87,6 +112,7 @@ export async function openStore(deps: StoreDeps): Promise<StateStore> {
           return failure(SAVE_FAILED_MESSAGE);
         }
         data = empty;
+        lastFailed = null;
         blocked = false;
         failedToRead = false;
         return { ok: true, data: empty };

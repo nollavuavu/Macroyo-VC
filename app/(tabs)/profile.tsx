@@ -31,7 +31,7 @@ import { msg } from '@/src/i18n/msg';
 import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningNotice } from '@/src/components/ui';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -244,7 +244,7 @@ function BodyEditor({
       {profile.units === 'metric' ? (
         <Field label={t('common.height')} value={heightText} onChangeText={setHeightText} suffix="cm" />
       ) : (
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
           <View style={{ flex: 1 }}><Field label={t('common.feet')} value={heightText} onChangeText={setHeightText} keyboard="number" /></View>
           <View style={{ flex: 1 }}><Field label={t('common.inches')} value={inchText} onChangeText={setInchText} /></View>
         </View>
@@ -267,7 +267,7 @@ function BodyEditor({
       <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
       {error ? <AppText variant="caption" color={theme.colors.warningText}>{tm(error)}</AppText> : null}
       {planNotesShown.map((note) => (
-        <AppText key={note.key} variant="caption" color={theme.colors.warningText} testID={`plan-note-${note.key}`}>{tm(note)}</AppText>
+        <WarningNotice key={note.key} variant="caption" testID={`plan-note-${note.key}`}>{tm(note)}</WarningNotice>
       ))}
       <PrimaryButton label={profile.targets.custom ? t('profile.saveKeepTargets') : t('profile.saveRecalculate')} onPress={() => saveBody(false)} />
       {profile.targets.custom ? <SecondaryButton label={t('profile.recalculate')} onPress={() => saveBody(true)} /> : null}

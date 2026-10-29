@@ -41,6 +41,8 @@ interface AppContextValue {
   addBodyStat: (stat: BodyStat) => Promise<boolean>;
   deleteBodyStat: (id: string) => Promise<boolean>;
   resetAll: () => Promise<boolean>;
+  /** Banner Retry: re-applies the change whose save failed, or re-reads unreadable data. */
+  retry: () => Promise<boolean>;
   /** Persist the language preference and switch the UI language immediately. */
   setLanguage: (language: LanguagePref) => Promise<boolean>;
 }
@@ -127,6 +129,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const ok = await commit((cur) => ({ ...cur, language }));
       if (ok) setLocale(resolvePreference(language, deviceLanguageTags()));
       return ok;
+    },
+    retry: async () => {
+      const store = storeRef.current;
+      if (!store) return false;
+      const result = await store.retry();
+      if (result.ok) {
+        setData(result.data);
+        setLocale(resolvePreference(result.data.language ?? 'system', deviceLanguageTags()));
+        setReadFailed(false);
+        setError(null);
+        return true;
+      }
+      setError(result.error);
+      return false;
     },
     resetAll: async () => {
       const store = storeRef.current;

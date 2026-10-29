@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -20,7 +20,8 @@ import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { MacroTokens } from '@/src/components/MacroTokens';
 import { borderStrong } from '@/src/theme/extras';
-import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, useDebounced } from '@/src/components/ui';
+import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, WarningNotice, useDebounced, type Scroller } from '@/src/components/ui';
+import { scrollTargetY } from '@/src/lib/scroll';
 
 const foods = loadFoods();
 
@@ -71,6 +72,13 @@ export default function LogScreen() {
   const [edit, setEdit] = useState<EditFields | null>(null);
   const [editErrors, setEditErrors] = useState<Partial<Record<QuickAddField, Msg>>>({});
   const [editWarning, setEditWarning] = useState<Msg | null>(null);
+  // A warning appears at the bottom of a tall card: scroll it into view so Save never seems to do nothing.
+  const scrollRef = useRef<Scroller>(null);
+  const portionCardY = useRef(0);
+  const quickCardY = useRef(0);
+  const revealWarning = (cardY: number, event: LayoutChangeEvent) => {
+    scrollRef.current?.scrollTo({ y: scrollTargetY(cardY, event.nativeEvent.layout.y, theme.spacing.xxl), animated: true });
+  };
 
   const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
   const results = allResults.slice(0, shown);
@@ -268,7 +276,7 @@ export default function LogScreen() {
   };
 
   return (
-    <Screen testID="screen-log">
+    <Screen testID="screen-log" scrollRef={scrollRef}>
       <AppText variant="title">{t('log.title')}</AppText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
         {MEALS.map((option) => (
@@ -288,6 +296,7 @@ export default function LogScreen() {
       <Field label={t('log.searchFoods')} accessibilityLabel={t('log.searchFoods')} value={query} onChangeText={setQuery} keyboard="default" placeholder={t('log.searchPlaceholder')} />
 
       {selected || editing ? (
+        <View onLayout={(event) => { portionCardY.current = event.nativeEvent.layout.y; }}>
         <Card style={{ gap: theme.spacing.md }}>
           <AppText variant="section">{editing ? editing.name : selected?.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
@@ -327,10 +336,12 @@ export default function LogScreen() {
                   </>
                 );
               })()}
-              {editWarning ? (
-                <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert">{tm(editWarning)} {t('log.fixOrSave')}</AppText>
-              ) : null}
             </View>
+          ) : null}
+          {editing && editWarning ? (
+            <WarningNotice testID="edit-warning" onLayout={(event) => revealWarning(portionCardY.current, event)}>
+              {tm(editWarning)} {t('log.fixOrSave')}
+            </WarningNotice>
           ) : null}
           {editing && editWarning ? (
             <PrimaryButton label={t('log.saveAnyway')} onPress={() => { const grams = parseDecimal(gramsText); if (grams != null) void saveEdit(grams, true); }} />
@@ -339,10 +350,12 @@ export default function LogScreen() {
           )}
           <SecondaryButton label={t('common.cancel')} onPress={() => { setSelected(null); setEditing(null); setEdit(null); setFormError(null); setEditErrors({}); setEditWarning(null); }} />
         </Card>
+        </View>
       ) : null}
 
       <Chip label={quick ? t('log.hideQuickAdd') : t('log.quickAdd')} selected={quick} onPress={() => { setQuick((value) => !value); setSelected(null); setEditing(null); }} />
       {quick ? (
+        <View onLayout={(event) => { quickCardY.current = event.nativeEvent.layout.y; }}>
         <Card style={{ gap: theme.spacing.md }}>
           <AppText variant="section">{t('log.quickAdd')}</AppText>
           <Field label={t('common.name')} value={quickName} onChangeText={setQuickName} error={text(quickErrors.name)} keyboard="default" placeholder={t('log.quickNamePlaceholder')} />
@@ -354,9 +367,9 @@ export default function LogScreen() {
           <Field label={t('log.portion')} value={quickGrams} onChangeText={setQuickGrams} error={text(quickErrors.grams)} suffix="g" />
           {formError ? <AppText variant="caption" color={theme.colors.warningText}>{tm(formError)}</AppText> : null}
           {quickWarning ? (
-            <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="quick-warning">
+            <WarningNotice testID="quick-warning" onLayout={(event) => revealWarning(quickCardY.current, event)}>
               {tm(quickWarning)} {t('log.fixOrSave')}
-            </AppText>
+            </WarningNotice>
           ) : null}
           {quickWarning ? (
             <>
@@ -367,6 +380,7 @@ export default function LogScreen() {
             <PrimaryButton label={t('log.saveQuickAdd')} onPress={() => saveQuick(false)} testID="quick-save" />
           )}
         </Card>
+        </View>
       ) : null}
 
       {debounced.trim() ? (
@@ -389,8 +403,9 @@ export default function LogScreen() {
               <View style={{ flex: 1 }}>
                 <AppText>{food.name}</AppText>
                 <AppText variant="caption" color={theme.colors.textSecondary}>
-                  {t('log.resultDetail', { kcal: formatKcal(food.kcalPer100g), p: formatAmount(food.proteinPer100g), c: formatAmount(food.carbsPer100g), f: formatAmount(food.fatPer100g), fiber: formatFiber(food.fiberPer100g) })}
+                  {t('log.resultDetail', { kcal: formatKcal(food.kcalPer100g), fiber: formatFiber(food.fiberPer100g) })}
                 </AppText>
+                <MacroTokens protein={food.proteinPer100g} carbs={food.carbsPer100g} fat={food.fatPer100g} digits={1} />
               </View>
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' }}>
                 <Plus color={theme.colors.onAccent} size={18} strokeWidth={2.4} />
@@ -417,7 +432,7 @@ export default function LogScreen() {
           </AppText>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
             <SecondaryButton label={t('common.edit')} onPress={() => openEdit(entry)} />
-            <Pressable accessibilityRole="button" accessibilityLabel={t('log.deleteLabel', { name: entry.name })} onPress={() => remove(entry)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('log.deleteLabel', { name: entry.name })} onPress={() => remove(entry)} style={{ minHeight: theme.sizes.minTouchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm }}>
               <Trash2 color={theme.colors.warningText} size={20} />
             </Pressable>
           </View>

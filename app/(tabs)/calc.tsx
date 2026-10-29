@@ -32,7 +32,7 @@ import type { Msg } from '@/src/i18n/types';
 import { msg } from '@/src/i18n/msg';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
-import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, Segmented } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, Segmented, WarningNotice } from '@/src/components/ui';
 
 type Mode = 'bmi' | 'ffmi' | 'calories';
 type Direction = 'deficit' | 'surplus';
@@ -189,7 +189,7 @@ export default function CalcScreen() {
 
       {typedInvalid ? (
         <Card>
-          <AppText variant="secondary" color={theme.colors.warningText} accessibilityRole="alert">{t('calc.fixEntry')}</AppText>
+          <WarningNotice testID="calc-fix-entry">{t('calc.fixEntry')}</WarningNotice>
         </Card>
       ) : null}
 
@@ -233,7 +233,7 @@ export default function CalcScreen() {
               {t('calc.estimateBmr', { bmr: typedInvalid ? '—' : formatKcal(plan.bmr) })}
             </AppText>
             {plan.implausible && !typedInvalid ? (
-              <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="calc-implausible">{tm(plan.implausible)}</AppText>
+              <WarningNotice testID="calc-implausible" variant="caption">{tm(plan.implausible)}</WarningNotice>
             ) : null}
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} />
             <GroupLabel>{t('common.sex')}</GroupLabel>
@@ -327,23 +327,22 @@ export default function CalcScreen() {
           </Card>
           <Card style={{ gap: theme.spacing.sm }}>
             {projection.horizons.map((row) => (
-              <View key={row.horizon_days} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+              <View key={row.horizon_days} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.sm }}>
                 <View style={{ flex: 1 }}>
                   <AppText variant="bodyMedium">{tm(horizonMsg(row.horizon_days))}</AppText>
                   <AppText variant="caption" color={theme.colors.textSecondary}>
                     {t(row.model === 'static' ? 'calc.model.static' : 'calc.model.weekly')}
                   </AppText>
-                  {row.clamped ? (
-                    <AppText variant="caption" color={theme.colors.warningText} testID={`clamped-${row.horizon_days}`}>
-                      † {t('calc.clampedNote')}
-                    </AppText>
-                  ) : null}
                 </View>
-                <AppText variant="macroGrams">
-                  {`${withUnit(formatSigned(row.delta_kg_r), 'kg')}${NBSP}/${NBSP}${withUnit(formatSigned(row.delta_lb_r), 'lb')}${row.clamped ? `${NBSP}†` : ''}`}
+                <AppText variant="macroGrams" testID={row.clamped ? `clamped-${row.horizon_days}` : undefined}>
+                  {`${withUnit(formatSigned(row.delta_kg_r), 'kg')}${NBSP}/${NBSP}${withUnit(formatSigned(row.delta_lb_r), 'lb')}`}
+                  {row.clamped ? <AppText variant="macroGrams" color={theme.colors.warningText}>{`${NBSP}†`}</AppText> : null}
                 </AppText>
               </View>
             ))}
+            {projection.horizons.some((row) => row.clamped) ? (
+              <WarningNotice testID="clamped-legend" variant="caption">† {t('calc.clampedNote')}</WarningNotice>
+            ) : null}
             <AppText variant="caption" color={theme.colors.textSecondary}>
               {t('calc.horizonNote')}
             </AppText>

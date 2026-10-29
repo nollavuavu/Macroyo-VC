@@ -1,5 +1,5 @@
 import { Redirect, Tabs } from 'expo-router';
-import { Calculator, House, TrendingUp, UserRound, Utensils } from 'lucide-react-native';
+import { TabIcon } from '@/src/components/TabIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { useI18n } from '@/src/i18n/react';
@@ -38,7 +38,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.today'),
           tabBarButtonTestID: 'tab-today',
-          tabBarIcon: ({ color, focused }) => <House color={color} size={22} strokeWidth={focused ? 2.6 : 2} fill={focused ? color : 'none'} />,
+          tabBarIcon: ({ color, focused }) => <TabIcon route="index" color={color} focused={focused} knockout={theme.colors.surface} />,
         }}
       />
       <Tabs.Screen
@@ -46,7 +46,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.log'),
           tabBarButtonTestID: 'tab-log',
-          tabBarIcon: ({ color, focused }) => <Utensils color={color} size={22} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: ({ color, focused }) => <TabIcon route="log" color={color} focused={focused} knockout={theme.colors.surface} />,
         }}
       />
       <Tabs.Screen
@@ -54,7 +54,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.calc'),
           tabBarButtonTestID: 'tab-calc',
-          tabBarIcon: ({ color, focused }) => <Calculator color={color} size={22} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: ({ color, focused }) => <TabIcon route="calc" color={color} focused={focused} knockout={theme.colors.surface} />,
         }}
       />
       <Tabs.Screen
@@ -62,7 +62,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.trends'),
           tabBarButtonTestID: 'tab-trends',
-          tabBarIcon: ({ color, focused }) => <TrendingUp color={color} size={22} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: ({ color, focused }) => <TabIcon route="trends" color={color} focused={focused} knockout={theme.colors.surface} />,
         }}
       />
       <Tabs.Screen
@@ -70,7 +70,7 @@ export default function TabLayout() {
         options={{
           title: t('tabs.profile'),
           tabBarButtonTestID: 'tab-profile',
-          tabBarIcon: ({ color, focused }) => <UserRound color={color} size={22} strokeWidth={focused ? 2.6 : 2} fill={focused ? color : 'none'} />,
+          tabBarIcon: ({ color, focused }) => <TabIcon route="profile" color={color} focused={focused} knockout={theme.colors.surface} />,
         }}
       />
     </Tabs>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
 import {
   Platform,
   Pressable,
@@ -8,14 +8,16 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { TriangleAlert } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '../state/AppContext';
 import { useI18n } from '../i18n/react';
-import { borderStrong } from '../theme/extras';
+import { borderStrong, fabGeometry, marks, warningBoundary } from '../theme/extras';
 import type { Theme, TypographyKey } from '../theme/theme';
 
 export { DISCLAIMER } from '../lib/copy';
@@ -60,28 +62,35 @@ export function AppText({
   );
 }
 
+/** The part of a ScrollView that screens use to bring a warning into view. */
+export type Scroller = ComponentRef<typeof ScrollView>;
+
 export function Screen({
   children,
   scroll = true,
   testID,
   fabClearance = false,
+  scrollRef,
 }: {
   children: ReactNode;
   scroll?: boolean;
   testID?: string;
   /** Adds FAB height + 24 of bottom padding so the end of the scroll clears a floating button. */
   fabClearance?: boolean;
+  /** Lets a screen scroll a warning into view. */
+  scrollRef?: Ref<Scroller>;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const body = scroll ? (
     <ScrollView
+      ref={scrollRef}
       testID={testID}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
         paddingHorizontal: theme.spacing.lg,
         paddingTop: theme.spacing.sm,
-        paddingBottom: insets.bottom + theme.sizes.tabBarHeight + (fabClearance ? theme.sizes.fab + theme.spacing.xxl : theme.spacing.xxxl),
+        paddingBottom: fabClearance ? fabGeometry(theme, insets.bottom).contentPaddingBottom : insets.bottom + theme.sizes.tabBarHeight + theme.spacing.xxxl,
         gap: theme.spacing.lg,
       }}
     >
@@ -104,18 +113,60 @@ export function Screen({
 export function StorageBanner() {
   const theme = useTheme();
   const { t, tm } = useI18n();
-  const { error, readFailed, resetAll } = useApp();
+  const { error, readFailed, resetAll, retry } = useApp();
   if (!error) return null;
+  return (
+    <View style={{ paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm }}>
+      <WarningNotice framed testID="storage-banner" actions={(
+        <>
+          <SecondaryButton label={t('storage.retry')} onPress={() => { void retry(); }} testID="storage-retry" />
+          {readFailed ? (
+            <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="reset-unreadable" />
+          ) : null}
+        </>
+      )}>
+        {tm(error)}
+      </WarningNotice>
+    </View>
+  );
+}
+
+/**
+ * An amber warning that is never colour-only: a warning icon and body text in warningText (4.96:1 on white).
+ * `framed` is the stand-alone card (outlined in warningText, on the surface colour) used for storage problems;
+ * the default is an inline callout with a leading bar, used inside forms. `actions` render under the text.
+ */
+export function WarningNotice({
+  children,
+  framed = false,
+  actions,
+  testID,
+  onLayout,
+  variant = 'secondary',
+}: {
+  children: ReactNode;
+  framed?: boolean;
+  actions?: ReactNode;
+  testID?: string;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  variant?: TypographyKey;
+}) {
+  const theme = useTheme();
+  const color = warningBoundary(theme);
   return (
     <View
       accessibilityRole="alert"
-      testID="storage-banner"
-      style={{ paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm, gap: theme.spacing.sm }}
+      testID={testID}
+      onLayout={onLayout}
+      style={framed
+        ? { backgroundColor: theme.colors.surface, borderColor: color, borderWidth: 1.5, borderRadius: theme.radii.card, padding: theme.spacing.lg, gap: theme.spacing.md }
+        : { borderLeftColor: color, borderLeftWidth: theme.spacing.xs, paddingLeft: theme.spacing.md, gap: theme.spacing.sm }}
     >
-      <AppText variant="caption" color={theme.colors.warningText}>{tm(error)}</AppText>
-      {readFailed ? (
-        <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="reset-unreadable" />
-      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }}>
+        <TriangleAlert color={color} size={20} strokeWidth={2.2} />
+        <AppText variant={variant} color={theme.colors.warningText} style={{ flex: 1 }}>{children}</AppText>
+      </View>
+      {actions}
     </View>
   );
 }
@@ -344,7 +395,7 @@ export function Field({
   return (
     <View style={{ gap: theme.spacing.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-        {labelColor ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: labelColor }} /> : null}
+        {labelColor ? <View style={{ width: marks.dot, height: marks.dot, borderRadius: marks.dot / 2, backgroundColor: labelColor }} /> : null}
         <AppText variant="secondary" color={theme.colors.textSecondary}>
           {label}
         </AppText>
@@ -354,7 +405,7 @@ export function Field({
           minHeight: theme.sizes.inputHeight,
           borderRadius: theme.radii.button,
           borderWidth,
-          borderColor: error ? theme.colors.warning : focused ? theme.colors.primary : borderStrong(theme),
+          borderColor: error ? warningBoundary(theme) : focused ? theme.colors.primary : borderStrong(theme),
           backgroundColor: theme.colors.surface,
           flexDirection: 'row',
           alignItems: 'center',
@@ -458,9 +509,9 @@ export function ProgressTrack({
   return (
     <View
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-      style={{ height: 8, borderRadius: theme.radii.pill, backgroundColor: theme.colors.border, overflow: 'hidden' }}
+      style={{ height: marks.dot, borderRadius: theme.radii.pill, backgroundColor: theme.colors.border, overflow: 'hidden' }}
     >
-      <View style={{ width: width * clamped, height: 8, borderRadius: theme.radii.pill, backgroundColor: color }} />
+      <View style={{ width: width * clamped, height: marks.dot, borderRadius: theme.radii.pill, backgroundColor: color }} />
     </View>
   );
 }

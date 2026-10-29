@@ -15,6 +15,7 @@ import { msg } from '@/src/i18n/msg';
 import type { Msg } from '@/src/i18n/types';
 import { AppText, Card, ProgressTrack, Screen, SecondaryButton } from '@/src/components/ui';
 import { CalorieRing } from '@/src/components/Ring';
+import { fabGeometry, marks } from '@/src/theme/extras';
 
 const MACRO_ICON = {
   protein: Drumstick,
@@ -93,7 +94,7 @@ export default function TodayScreen() {
                     {Number(iso.slice(-2))}
                   </AppText>
                 </View>
-                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: hasLogs ? theme.colors.primary : 'transparent' }} />
+                <View style={{ width: marks.dotSmall, height: marks.dotSmall, borderRadius: marks.dotSmall / 2, backgroundColor: hasLogs ? theme.colors.primary : 'transparent' }} />
               </Pressable>
             );
           })}
@@ -113,7 +114,7 @@ export default function TodayScreen() {
             const ratio = progressRatio(consumed, target);
             return (
               <View key={key} style={{ gap: theme.spacing.xs }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
                   <Icon color={fill} size={18} strokeWidth={2} />
                   <AppText variant="bodyMedium" style={{ flex: 1 }}>{t(`macro.${key}`)}</AppText>
                   <AppText variant="macroGrams" color={text}>{`${formatAmount(consumed, 0)} / ${withUnit(formatAmount(target, 0), 'g')}${target > 0 ? `${NBSP}· ${formatPercent(ratio)}` : ''}`}</AppText>
@@ -132,7 +133,7 @@ export default function TodayScreen() {
             <Image
               source={require('../../assets/icon-small.png')}
               accessibilityIgnoresInvertColors
-              style={{ width: 64, height: 64, borderRadius: 16, opacity: 0.9 }}
+              style={{ width: marks.emptyMark, height: marks.emptyMark, borderRadius: marks.emptyMark / 4, opacity: 0.9 }}
             />
             <AppText variant="section">{t('today.emptyTitle')}</AppText>
             <AppText variant="secondary" color={theme.colors.textSecondary} style={{ textAlign: 'center' }}>
@@ -195,7 +196,7 @@ export default function TodayScreen() {
         style={{
           position: 'absolute',
           right: theme.spacing.lg,
-          bottom: insets.bottom + theme.sizes.tabBarHeight + theme.spacing.md,
+          bottom: fabGeometry(theme, insets.bottom).bottom,
           width: theme.sizes.fab,
           height: theme.sizes.fab,
           borderRadius: theme.sizes.fab / 2,

@@ -5,7 +5,8 @@ import { addDays, friendlyDate, localDateISO, shortDate, weekdayNarrow } from '@
 import { formatAmount, formatFixed, formatKcal } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import { mean, trailingAverage } from '@/src/lib/stats';
-import { borderStrong } from '@/src/theme/extras';
+import { borderStrong, warningBoundary } from '@/src/theme/extras';
+import { chartTextProps } from '@/src/theme/chartText';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { AppText, Card, Screen, Segmented } from '@/src/components/ui';
 
@@ -93,7 +94,7 @@ export default function TrendsScreen() {
             target={target}
             max={maxCal}
             fill={theme.colors.primary}
-            over={theme.colors.warning}
+            over={warningBoundary(theme)}
             grid={theme.colors.border}
             axis={borderStrong(theme)}
             text={theme.colors.textSecondary}
@@ -159,6 +160,7 @@ function WeightChart({
   text: string;
 }) {
   const { t } = useI18n();
+  const labelProps = chartTextProps(useTheme());
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
@@ -180,11 +182,11 @@ function WeightChart({
     >
       <Line x1={PAD_L} y1={PAD_T} x2={CHART_W - PAD_R} y2={PAD_T} stroke={grid} strokeWidth="1" />
       <Line x1={PAD_L} y1={PAD_T + plotH} x2={CHART_W - PAD_R} y2={PAD_T + plotH} stroke={axis} strokeWidth="1" />
-      <SvgText x={PAD_L - 6} y={PAD_T + 4} fontSize="11" fill={text} textAnchor="end">{formatAmount(max)}</SvgText>
-      <SvgText x={PAD_L - 6} y={PAD_T + plotH + 4} fontSize="11" fill={text} textAnchor="end">{formatAmount(min)}</SvgText>
-      <SvgText x={PAD_L} y={CHART_H - 6} fontSize="11" fill={text} textAnchor="start">{shortDate(dates[0])}</SvgText>
+      <SvgText x={PAD_L - 6} y={PAD_T + 4} {...labelProps} fill={text} textAnchor="end">{formatAmount(max)}</SvgText>
+      <SvgText x={PAD_L - 6} y={PAD_T + plotH + 4} {...labelProps} fill={text} textAnchor="end">{formatAmount(min)}</SvgText>
+      <SvgText x={PAD_L} y={CHART_H - 6} {...labelProps} fill={text} textAnchor="start">{shortDate(dates[0])}</SvgText>
       {values.length > 1 ? (
-        <SvgText x={CHART_W - PAD_R} y={CHART_H - 6} fontSize="11" fill={text} textAnchor="end">{shortDate(dates[dates.length - 1])}</SvgText>
+        <SvgText x={CHART_W - PAD_R} y={CHART_H - 6} {...labelProps} fill={text} textAnchor="end">{shortDate(dates[dates.length - 1])}</SvgText>
       ) : null}
       {values.length > 1 ? <Polyline points={points(values)} fill="none" stroke={color} strokeOpacity={0.45} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" /> : null}
       {values.length > 1 ? <Polyline points={points(averages)} fill="none" stroke={color} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" /> : null}
@@ -219,6 +221,7 @@ function CalorieBars({
   line: string;
 }) {
   const { t } = useI18n();
+  const labelProps = chartTextProps(useTheme());
   const gap = 4;
   const plotW = CHART_W - PAD_L - PAD_R;
   const plotH = CHART_H - PAD_T - PAD_B;
@@ -237,8 +240,8 @@ function CalorieBars({
         : t('trends.caloriesChartLabel', { count: values.length })}
     >
       <Line x1={PAD_L} y1={PAD_T + plotH} x2={CHART_W - PAD_R} y2={PAD_T + plotH} stroke={axis} strokeWidth="1" />
-      <SvgText x={PAD_L - 6} y={PAD_T + plotH + 4} fontSize="11" fill={text} textAnchor="end">0</SvgText>
-      <SvgText x={PAD_L - 6} y={PAD_T + 4} fontSize="11" fill={text} textAnchor="end">{formatKcal(max)}</SvgText>
+      <SvgText x={PAD_L - 6} y={PAD_T + plotH + 4} {...labelProps} fill={text} textAnchor="end">0</SvgText>
+      <SvgText x={PAD_L - 6} y={PAD_T + 4} {...labelProps} fill={text} textAnchor="end">{formatKcal(max)}</SvgText>
       {values.map((value, index) => {
         const x = PAD_L + index * (barWidth + gap);
         const barHeight = Math.max(0, (value / max) * plotH);
@@ -247,7 +250,7 @@ function CalorieBars({
           <G key={index}>
             <Rect x={x} y={PAD_T + plotH - barHeight} width={barWidth} height={barHeight} rx="3" fill={target > 0 && value > target ? over : fill} />
             {label ? (
-              <SvgText x={x + barWidth / 2} y={CHART_H - 8} fontSize="11" fill={text} textAnchor="middle">{label}</SvgText>
+              <SvgText x={x + barWidth / 2} y={CHART_H - 8} {...labelProps} fill={text} textAnchor="middle">{label}</SvgText>
             ) : null}
           </G>
         );

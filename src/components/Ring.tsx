@@ -1,6 +1,7 @@
 import Svg, { Circle } from 'react-native-svg';
 import { View } from 'react-native';
 import { AppText } from './ui';
+import { warningBoundary } from '../theme/extras';
 import { useTheme } from '../state/AppContext';
 import { useI18n } from '../i18n/react';
 import { formatKcal, withUnit } from '../lib/format';
@@ -17,7 +18,7 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
   const shown = remainingDisplay(consumed, target);
   const ratio = shown.target > 0 ? shown.consumed / shown.target : 0;
   const over = shown.target > 0 && shown.kind === 'over';
-  const color = over ? theme.colors.warning : theme.colors.primary;
+  const color = over ? warningBoundary(theme) : theme.colors.primary;
   const dash = target > 0 ? Math.min(1, Math.max(0, ratio)) * circumference : 0;
   return (
     <View

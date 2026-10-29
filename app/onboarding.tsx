@@ -29,7 +29,8 @@ import { useI18n } from '@/src/i18n/react';
 import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
 import type { Profile } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningNotice } from '@/src/components/ui';
+import { onboardingHint } from '@/src/lib/onboardingHint';
 
 const STEPS = ['welcome', 'body', 'activity', 'goal', 'plan'] as const;
 
@@ -102,6 +103,8 @@ export default function OnboardingScreen() {
     ? { kcal: parseDecimal(kcalText), proteinG: parseDecimal(proteinText), carbsG: parseDecimal(carbText), fatG: parseDecimal(fatTargetText) }
     : { kcal: plan.kcal, proteinG: plan.proteinG, carbsG: plan.carbsG, fatG: plan.fatG };
 
+  const hint = onboardingHint({ step, hasSex: !!sex, bodyValid: ageCheck.ok && heightCheck.ok && weightCheck.ok && fatCheck.ok, underage: !!ageCheck.underage, hasActivity: !!activity, hasGoal: !!goal });
+
   function next() {
     setShowErrors(true);
     if (step === 1) {
@@ -173,8 +176,8 @@ export default function OnboardingScreen() {
         <AppText variant="caption" color={theme.colors.textSecondary}>
           {t('onboarding.stepOf', { current: step + 1, total: STEPS.length, name: t(`onboarding.step.${STEPS[step]}`) })}
         </AppText>
-        <View style={{ height: 4, borderRadius: 99, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
-          <View style={{ width: `${((step + 1) / STEPS.length) * 100}%`, height: 4, backgroundColor: theme.colors.primary }} />
+        <View style={{ height: theme.spacing.xs, borderRadius: theme.radii.pill, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
+          <View style={{ width: `${((step + 1) / STEPS.length) * 100}%`, height: theme.spacing.xs, backgroundColor: theme.colors.primary }} />
         </View>
       </View>
 
@@ -215,7 +218,7 @@ export default function OnboardingScreen() {
           {ageCheck.underage ? (
             <Card>
               <AppText variant="section">{t('onboarding.adultsTitle')}</AppText>
-              <AppText variant="secondary" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
+              <AppText variant="secondary" color={theme.colors.textSecondary} style={{ marginTop: theme.spacing.sm }}>
                 {t('onboarding.adultsBody')}
               </AppText>
             </Card>
@@ -240,7 +243,7 @@ export default function OnboardingScreen() {
           <Field label={t('common.weight')} value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? text(weightCheck.message) : null} />
           <Field label={t('common.bodyFatOptional')} value={fatText} onChangeText={setFatText} suffix="%" placeholder={t('onboarding.bodyFatPlaceholder')} error={showErrors ? text(fatCheck.message) : null} />
           <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
-          {showErrors && implausible ? <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="body-implausible">{tm(implausible)}</AppText> : null}
+          {showErrors && implausible ? <WarningNotice testID="body-implausible">{tm(implausible)}</WarningNotice> : null}
         </View>
       ) : null}
 
@@ -268,7 +271,7 @@ export default function OnboardingScreen() {
             const blocked = option === 'cut' && (!plan.goalAllowed || pregnant || (bmi != null && bmi < 18.5) || plan.deficitUnavailable);
             const reason = option === 'cut' ? buildMacroPlan({ ...planInput(), goal: 'cut' }).goalBlockReason : null;
             return (
-              <View key={option} style={{ gap: 4 }}>
+              <View key={option} style={{ gap: theme.spacing.xs }}>
                 <Chip
                   label={tm(GOAL_DETAILS[option].label)}
                   detail={tm(GOAL_DETAILS[option].description)}
@@ -289,9 +292,9 @@ export default function OnboardingScreen() {
           <AppText variant="title">{t('onboarding.planTitle')}</AppText>
           <Card>
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={(value) => { setFormulaChoice(value); setTargetsEdited(false); }} />
-            <AppText variant="metricNumber" style={{ marginTop: 8 }}>{formatKcal(plan.tdee)}</AppText>
+            <AppText variant="metricNumber" style={{ marginTop: theme.spacing.sm }}>{formatKcal(plan.tdee)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>{t('onboarding.maintenance', { bmr: formatKcal(plan.bmr) })}</AppText>
-            {plan.capped && plan.capReason ? <AppText variant="caption" color={theme.colors.warningText} style={{ marginTop: 8 }}>{tm(plan.capReason)}</AppText> : null}
+            {plan.capped && plan.capReason ? <AppText variant="caption" color={theme.colors.warningText} style={{ marginTop: theme.spacing.sm }}>{tm(plan.capReason)}</AppText> : null}
           </Card>
           <Field label={t('common.calories')} value={targetsEdited ? kcalText : formatInputNumber(plan.kcal)} onChangeText={(value) => { setTargetsEdited(true); setKcalText(value); }} suffix="kcal" error={targetError('kcal')} />
           <Field label={t('macro.protein')} value={targetsEdited ? proteinText : formatInputNumber(plan.proteinG)} onChangeText={(value) => { setTargetsEdited(true); setProteinText(value); }} suffix="g" error={targetError('proteinG')} />
@@ -311,6 +314,7 @@ export default function OnboardingScreen() {
         </View>
       ) : null}
 
+      {hint && !showErrors ? <AppText variant="caption" color={theme.colors.textSecondary} testID="onboarding-hint">{tm(hint)}</AppText> : null}
       <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
         {step > 0 ? <View style={{ flex: 1 }}><SecondaryButton label={t('common.back')} onPress={() => { setShowErrors(false); setStep((value) => value - 1); }} testID="onboarding-back" /></View> : null}
         <View style={{ flex: 1 }}>
