@@ -181,13 +181,36 @@ export const typography = {
   macroGrams: {
     fontFamily: fontFamilies.bodyMedium, fontSize: 14, lineHeight: 20, fontWeight: '500', fontVariant: tabular,
   },
-  /** Calculator inputs, DM Mono 32/36, tabular. */
+  /**
+   * Calculator readouts, DM Mono 32/36, tabular. DIGITS AND ASCII UNITS ONLY ("80,5 kg", "—"): DM Mono has no
+   * Vietnamese letters and no ₫, so a translated word here would fall back to the system font and shift the line.
+   * Never pass a catalog string or a currency to this variant.
+   */
   inputNumber: {
     fontFamily: fontFamilies.mono, fontSize: 32, lineHeight: 36, fontWeight: '500', fontVariant: tabular,
   },
   /** Button label 16/24 semibold. */
   button: { fontFamily: fontFamilies.bodySemibold, fontSize: 16, lineHeight: 24, fontWeight: '600' },
 } as const satisfies Record<string, TextStyleToken>;
+
+/**
+ * Vietnamese stacks tone marks above the letter (Ấ Ẳ Ế Ặ), which rise above the font's ascender line.
+ * Android clips anything outside a fixed lineHeight box, so these styles get a taller line in Vietnamese only.
+ * Sizes, weights and every other style are unchanged. Measured overhang: title 2.8 px, section 1.1, secondary 0.4, caption 0.9.
+ */
+export const VI_LINE_HEIGHTS = { title: 40, section: 29, secondary: 22, caption: 18 } as const;
+
+/** Typography for a language. Only 'vi' differs (taller lines); everything else is the base set. */
+export function typographyFor(locale: string | null | undefined): Record<TypographyKey, TextStyleToken> {
+  if (locale !== 'vi') return typography;
+  return {
+    ...typography,
+    title: { ...typography.title, lineHeight: VI_LINE_HEIGHTS.title },
+    section: { ...typography.section, lineHeight: VI_LINE_HEIGHTS.section },
+    secondary: { ...typography.secondary, lineHeight: VI_LINE_HEIGHTS.secondary },
+    caption: { ...typography.caption, lineHeight: VI_LINE_HEIGHTS.caption },
+  };
+}
 
 /** Keys of {@link typography}. */
 export type TypographyKey = keyof typeof typography;
@@ -312,7 +335,7 @@ export interface Theme {
   shadows: ShadowSet;
   /** Dark elevation surface steps; in light mode level0 is the background and the rest are white. */
   surfaces: { readonly level0: string; readonly level1: string; readonly level2: string; readonly level3: string };
-  typography: typeof typography;
+  typography: Record<TypographyKey, TextStyleToken>;
   fontFamilies: typeof fontFamilies;
   spacing: typeof spacing;
   radii: typeof radii;
@@ -326,7 +349,7 @@ export interface Theme {
 }
 
 /** Resolve the theme for a scheme. `null`/`undefined` (e.g. from `useColorScheme`) falls back to light. */
-export function getTheme(scheme: ColorScheme | null | undefined): Theme {
+export function getTheme(scheme: ColorScheme | null | undefined, locale?: string | null): Theme {
   const isDark = scheme === 'dark';
   const colors: ThemeColors = isDark ? darkColors : lightColors;
   return {
@@ -337,7 +360,7 @@ export function getTheme(scheme: ColorScheme | null | undefined): Theme {
     surfaces: isDark
       ? darkSurfaces
       : { level0: colors.background, level1: colors.surface, level2: colors.surface, level3: colors.surface },
-    typography,
+    typography: typographyFor(locale),
     fontFamilies,
     spacing,
     radii,

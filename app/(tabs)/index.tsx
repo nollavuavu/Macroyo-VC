@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderStrong } from '@/src/theme/extras';
 import { progressRatio, roundToSum, sumLogged } from '@/src/lib/domain';
 import { MEALS, MEAL_KEY, addDays, dayAccessibilityLabel, formatLongDate, weekDates, weekdayNarrow, type Meal } from '@/src/lib/dates';
-import { formatAmount, formatKcal } from '@/src/lib/format';
+import { NBSP, formatAmount, formatKcal, formatPercent, withUnit } from '@/src/lib/format';
 import { formatFiber } from '@/src/lib/foods/foods';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
@@ -116,7 +116,7 @@ export default function TodayScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Icon color={fill} size={18} strokeWidth={2} />
                   <AppText variant="bodyMedium" style={{ flex: 1 }}>{t(`macro.${key}`)}</AppText>
-                  <AppText variant="macroGrams" color={text}>{formatAmount(consumed, 0)} / {formatAmount(target, 0)} g{target > 0 ? ` · ${Math.round(ratio * 100)}%` : ''}</AppText>
+                  <AppText variant="macroGrams" color={text}>{`${formatAmount(consumed, 0)} / ${withUnit(formatAmount(target, 0), 'g')}${target > 0 ? `${NBSP}· ${formatPercent(ratio)}` : ''}`}</AppText>
                 </View>
                 <ProgressTrack ratio={ratio} color={fill} />
               </View>
@@ -152,7 +152,7 @@ export default function TodayScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.sizes.minTouchTarget }}>
                   <View style={{ flex: 1 }}>
                     <AppText variant="section">{t(MEAL_KEY[meal])}</AppText>
-                    <AppText variant="caption" color={theme.colors.textSecondary}>{formatKcal(subtotal)} kcal</AppText>
+                    <AppText variant="caption" color={theme.colors.textSecondary}>{withUnit(formatKcal(subtotal), 'kcal')}</AppText>
                   </View>
                 </View>
                 {items.map((item) => (

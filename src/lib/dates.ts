@@ -51,9 +51,12 @@ export function weekdayShort(iso: string, locale: Locale = getLocale()): string 
   return dateFormat(locale, { weekday: 'short' }).format(parseLocalDate(iso));
 }
 
-/** One-letter weekday for the week strip ("W", "T4", "K"), straight from Intl. */
+/**
+ * Week-strip letter from the catalog (date.narrow.0 = Sunday): en "M T W T F S S", fi "M T K T P L S", vi "T2 … T7 CN".
+ * A catalog table, not Intl 'narrow', so Hermes/ICU differences between devices can't change the strip.
+ */
 export function weekdayNarrow(iso: string, locale: Locale = getLocale()): string {
-  return dateFormat(locale, { weekday: 'narrow' }).format(parseLocalDate(iso));
+  return translate(locale, `date.narrow.${parseLocalDate(iso).getDay()}` as MessageKey);
 }
 
 /** "Today", "Yesterday", "Tomorrow", else the weekday, day and month in the locale ("Wed 28 Oct"). */

@@ -134,7 +134,7 @@ describe('Msg objects', () => {
   it('translate with params and nested messages, in every locale', () => {
     const nested = msg('limit.and', { a: msg('limit.onePct'), b: msg('limit.floor') });
     expect(translateMsg('en', nested)).toBe('1% of body weight per week and the calorie floor');
-    expect(translateMsg('fi', nested)).toBe('1 % painosta viikossa ja kalorien alaraja');
+    expect(translateMsg('fi', nested)).toBe('1\u00a0% painosta viikossa ja kalorien alaraja');
     expect(translateMsg('vi', nested)).toBe('1% cân nặng mỗi tuần và mức calo tối thiểu');
   });
   it('fall back to English, then to the key, for an unknown key', () => {

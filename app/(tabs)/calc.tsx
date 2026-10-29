@@ -26,7 +26,7 @@ import {
 } from '@/src/lib/domain';
 import { ACTIVITY_DETAILS, ACTIVITY_FACTORS, bmiTone } from '@/src/lib/domain';
 import { localDateISO, uid } from '@/src/lib/dates';
-import { formatAmount, formatFixed, formatInputNumber, formatKcal, formatSigned } from '@/src/lib/format';
+import { NBSP, formatAmount, formatFixed, formatInputNumber, formatKcal, formatSigned, withUnit } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import type { Msg } from '@/src/i18n/types';
 import { msg } from '@/src/i18n/msg';
@@ -150,7 +150,7 @@ export default function CalcScreen() {
       />
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.height')}</AppText>
-        <AppText variant="inputNumber">{units === 'metric' ? `${formatAmount(heightCm)} cm` : `${formatAmount(heightCm / 2.54)} in`}</AppText>
+        <AppText variant="inputNumber">{units === 'metric' ? withUnit(formatAmount(heightCm), 'cm') : withUnit(formatAmount(heightCm / 2.54), 'in')}</AppText>
         <Slider minimumValue={120} maximumValue={230} value={heightCm} onValueChange={(value) => { setHeightCm(value); setHeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
         <Field label={t('calc.typeHeight')} value={heightText ?? ''} onChangeText={(value) => {
           setHeightText(value);
@@ -160,7 +160,7 @@ export default function CalcScreen() {
       </Card>
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.weight')}</AppText>
-        <AppText variant="inputNumber">{units === 'metric' ? `${formatAmount(weightKg)} kg` : `${formatAmount(weightKg / 0.45359237)} lb`}</AppText>
+        <AppText variant="inputNumber">{units === 'metric' ? withUnit(formatAmount(weightKg), 'kg') : withUnit(formatAmount(weightKg / 0.45359237), 'lb')}</AppText>
         <Slider minimumValue={30} maximumValue={250} value={Math.min(250, Math.max(30, weightKg))} onValueChange={(value) => { setWeightKg(value); setWeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
         <Field label={t('calc.typeWeight')} value={weightText ?? ''} onChangeText={(value) => {
           setWeightText(value);
@@ -172,7 +172,7 @@ export default function CalcScreen() {
       {mode === 'ffmi' || mode === 'calories' ? (
         <Card style={{ gap: theme.spacing.sm }}>
           <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.bodyFat')}</AppText>
-          <AppText variant="inputNumber">{bodyFat == null ? '—' : `${formatAmount(bodyFat)} %`}</AppText>
+          <AppText variant="inputNumber">{bodyFat == null ? '—' : withUnit(formatAmount(bodyFat), '%')}</AppText>
           <Slider
             minimumValue={3}
             maximumValue={60}
@@ -337,7 +337,7 @@ export default function CalcScreen() {
                   ) : null}
                 </View>
                 <AppText variant="macroGrams">
-                  {formatSigned(row.delta_kg_r)} kg / {formatSigned(row.delta_lb_r)} lb{row.clamped ? ' †' : ''}
+                  {`${withUnit(formatSigned(row.delta_kg_r), 'kg')}${NBSP}/${NBSP}${withUnit(formatSigned(row.delta_lb_r), 'lb')}${row.clamped ? `${NBSP}†` : ''}`}
                 </AppText>
               </View>
             ))}

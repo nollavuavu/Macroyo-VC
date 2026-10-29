@@ -27,9 +27,12 @@ export function AppText({
   style,
   children,
   numberOfLines,
+  fit,
   testID,
   accessibilityRole,
 }: {
+  /** Shrinks the text down to 80% instead of wrapping or clipping (single-line labels in fixed-width controls). */
+  fit?: boolean;
   testID?: string;
   accessibilityRole?: 'alert' | 'text';
   variant?: TypographyKey;
@@ -39,12 +42,17 @@ export function AppText({
   numberOfLines?: number;
 }) {
   const theme = useTheme();
+  const { locale } = useI18n();
   return (
     <Text
       testID={testID}
       accessibilityRole={accessibilityRole}
       maxFontSizeMultiplier={2}
-      numberOfLines={numberOfLines}
+      numberOfLines={fit ? 1 : numberOfLines}
+      adjustsFontSizeToFit={fit}
+      minimumFontScale={fit ? 0.8 : undefined}
+      // Finnish compounds are long: let Android hyphenate at the soft hyphens in the catalog (iOS and web already do).
+      android_hyphenationFrequency={locale === 'fi' ? 'normal' : undefined}
       style={[theme.typography[variant], { color: color ?? theme.colors.textPrimary }, style]}
     >
       {children}
@@ -159,10 +167,11 @@ export function PrimaryButton({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.sm,
         opacity: pressed ? 0.85 : 1,
       })}
     >
-      <AppText variant="button" color={disabled ? theme.colors.textSecondary : theme.colors.onAccent}>
+      <AppText variant="button" style={{ textAlign: 'center' }} color={disabled ? theme.colors.textSecondary : theme.colors.onAccent}>
         {label}
       </AppText>
     </Pressable>
@@ -193,10 +202,11 @@ export function SecondaryButton({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.sm,
         opacity: pressed ? 0.8 : 1,
       })}
     >
-      <AppText variant="button" color={theme.colors.primary}>
+      <AppText variant="button" style={{ textAlign: 'center' }} color={theme.colors.primary}>
         {label}
       </AppText>
     </Pressable>
@@ -232,6 +242,7 @@ export function Chip({
         borderRadius: detail ? theme.radii.button : theme.radii.pill,
         paddingHorizontal: theme.spacing.lg,
         paddingVertical: theme.spacing.sm,
+        maxWidth: '100%',
         backgroundColor: selected ? theme.colors.accent : theme.colors.surface,
         borderWidth: 1,
         borderColor: selected ? theme.colors.accent : borderStrong(theme),
@@ -239,11 +250,11 @@ export function Chip({
         justifyContent: 'center',
       }}
     >
-      <AppText variant="bodyMedium" color={selected ? theme.colors.onAccent : theme.colors.textPrimary}>
+      <AppText variant="bodyMedium" fit color={selected ? theme.colors.onAccent : theme.colors.textPrimary}>
         {label}
       </AppText>
       {detail ? (
-        <AppText variant="caption" color={selected ? theme.colors.onAccent : theme.colors.textSecondary}>
+        <AppText variant="caption" numberOfLines={2} color={selected ? theme.colors.onAccent : theme.colors.textSecondary}>
           {detail}
         </AppText>
       ) : null}
@@ -288,11 +299,12 @@ export function Segmented<T extends string>({
               borderRadius: theme.radii.pill,
               alignItems: 'center',
               justifyContent: 'center',
+              paddingHorizontal: theme.spacing.xs,
               backgroundColor: selected ? theme.colors.surface : 'transparent',
               opacity: option.disabled ? 0.4 : 1,
             }}
           >
-            <AppText variant="secondary" color={selected ? theme.colors.primary : theme.colors.textSecondary} style={{ fontFamily: theme.fontFamilies.bodyMedium }}>
+            <AppText variant="secondary" fit color={selected ? theme.colors.primary : theme.colors.textSecondary} style={{ fontFamily: theme.fontFamilies.bodyMedium, textAlign: 'center' }}>
               {option.label}
             </AppText>
           </Pressable>

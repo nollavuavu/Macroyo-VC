@@ -1,5 +1,5 @@
 import { getLocale } from '../i18n/state';
-import { MINUS, formatNumberFor } from '../i18n/numbers';
+import { MINUS, NUMBER_TAG, formatNumberFor } from '../i18n/numbers';
 import type { Locale } from '../i18n/types';
 import { roundHalfUp } from './domain/projection';
 import { normalizeFeetInches } from './domain/nutrition';
@@ -9,6 +9,20 @@ import { normalizeFeetInches } from './domain/nutrition';
  * follow the active language (en 1,234.5 · vi 1.234,5 · fi 1 234,5). Values are rounded half-up first
  * (decimal-exact), then only formatted. Units are never translated: kg, lb, cm, ft, in, kcal, g.
  */
+
+/** U+00A0: keeps a number and its unit on one line ("80,5 kg" never splits across lines). */
+export const NBSP = '\u00a0';
+
+/** "80,5 kg" with a no-break space between the value and the unit. */
+export function withUnit(valueText: string, unit: string): string {
+  return `${valueText}${NBSP}${unit}`;
+}
+
+/** A ratio as a percentage in the locale ("52%", fi "52 %" with a no-break space). */
+export function formatPercent(ratio: number, locale: Locale = getLocale()): string {
+  if (!Number.isFinite(ratio)) return '—';
+  return new Intl.NumberFormat(NUMBER_TAG[locale], { style: 'percent', maximumFractionDigits: 0 }).format(Math.round(ratio * 100) / 100).replace(/-/g, MINUS);
+}
 
 /** Rounded to `digits` and shown without grouping ("12,5", "80"). Trailing zeros are kept only for whole `digits`. */
 export function formatAmount(value: number, digits = 1, locale: Locale = getLocale()): string {
@@ -37,16 +51,16 @@ export function formatSigned(value: number, digits = 1, locale: Locale = getLoca
 }
 
 export function formatWeightKg(kg: number, units: 'metric' | 'imperial'): string {
-  if (units === 'imperial') return `${formatAmount(kg / 0.45359237, 1)} lb`;
-  return `${formatAmount(kg, 1)} kg`;
+  if (units === 'imperial') return withUnit(formatAmount(kg / 0.45359237, 1), 'lb');
+  return withUnit(formatAmount(kg, 1), 'kg');
 }
 
 export function formatHeightCm(cm: number, units: 'metric' | 'imperial'): string {
   if (units === 'imperial') {
     const { feet, inches } = normalizeFeetInches(0, cm / 2.54);
-    return `${feet} ft ${formatAmount(inches, 1)} in`;
+    return `${withUnit(String(feet), 'ft')}${NBSP}${withUnit(formatAmount(inches, 1), 'in')}`;
   }
-  return `${formatAmount(cm, 1)} cm`;
+  return withUnit(formatAmount(cm, 1), 'cm');
 }
 
 /** Plain number text for an input box: the locale's decimal mark, no grouping ("80,5"). */

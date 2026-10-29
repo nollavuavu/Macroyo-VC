@@ -9,7 +9,7 @@ import {
   type QuickAddField,
 } from '@/src/lib/domain';
 import { MEALS, MEAL_KEY, addDays, friendlyDate, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
-import { formatAmount, formatInputNumber, formatKcal } from '@/src/lib/format';
+import { formatAmount, formatInputNumber, formatKcal, withUnit } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import { msg } from '@/src/i18n/msg';
 import type { Msg } from '@/src/i18n/types';
@@ -292,7 +292,7 @@ export default function LogScreen() {
           <AppText variant="section">{editing ? editing.name : selected?.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {editing ? t('log.editingEntry') : t('log.kcalPer100', { kcal: formatAmount(selected?.kcalPer100g ?? 0, 0) })}
-            {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${formatAmount(selected.servingSizeG)} g)` : ''}
+            {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${withUnit(formatAmount(selected.servingSizeG), 'g')})` : ''}
           </AppText>
           {editing && edit ? (
             <Field label={t('common.name')} value={edit.name} onChangeText={(value) => setEdit({ ...edit, name: value })} error={text(editErrors.name)} keyboard="default" />
@@ -300,15 +300,15 @@ export default function LogScreen() {
           <Field label={t('log.grams')} value={gramsText} onChangeText={setGramsText} suffix="g" error={text(formError ?? editErrors.grams)} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
-              <Chip label={selected.servingLabel ?? t('log.serving')} detail={`${formatAmount(selected.servingSizeG)} g`} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
+              <Chip label={selected.servingLabel ?? t('log.serving')} detail={withUnit(formatAmount(selected.servingSizeG), 'g')} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
             ) : null}
             {[50, 100, 150, 200].map((grams) => (
-              <Chip key={grams} label={`${grams} g`} selected={gramsText === formatInputNumber(grams) && gramsText !== (selected?.servingSizeG ? formatInputNumber(selected.servingSizeG) : '')} onPress={() => setGramsText(formatInputNumber(grams))} />
+              <Chip key={grams} label={withUnit(String(grams), 'g')} selected={gramsText === formatInputNumber(grams) && gramsText !== (selected?.servingSizeG ? formatInputNumber(selected.servingSizeG) : '')} onPress={() => setGramsText(formatInputNumber(grams))} />
             ))}
           </View>
           {preview ? (
             <View style={{ gap: theme.spacing.xs }}>
-              <AppText variant="bodyMedium">{formatKcal(preview.kcal)} kcal</AppText>
+              <AppText variant="bodyMedium">{withUnit(formatKcal(preview.kcal), 'kcal')}</AppText>
               <MacroTokens protein={preview.protein} carbs={preview.carbs} fat={preview.fat} />
               <AppText variant="caption" color={theme.colors.textSecondary}>{t('log.fiberPreview', { fiber: formatFiber(preview.fiber) })}</AppText>
             </View>

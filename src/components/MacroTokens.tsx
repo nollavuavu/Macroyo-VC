@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { macroOrder } from '@/src/theme/theme';
-import { formatAmount } from '@/src/lib/format';
+import { formatAmount, withUnit } from '@/src/lib/format';
 import { useTheme } from '@/src/state/AppContext';
 import { useI18n } from '@/src/i18n/react';
 import { AppText } from './ui';
@@ -21,7 +21,7 @@ export function MacroTokens({ protein, carbs, fat }: { protein: number; carbs: n
         <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.macroColors[key] }} />
           <AppText variant="macroGrams" color={theme.macroTextColors[key]}>
-            {t(`macro.letter.${key}`)} {formatAmount(values[key], 0)}g
+            {t(`macro.letter.${key}`)} {withUnit(formatAmount(values[key], 0), 'g')}
           </AppText>
         </View>
       ))}

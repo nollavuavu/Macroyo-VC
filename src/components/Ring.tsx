@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { AppText } from './ui';
 import { useTheme } from '../state/AppContext';
 import { useI18n } from '../i18n/react';
-import { formatKcal } from '../lib/format';
+import { formatKcal, withUnit } from '../lib/format';
 import { remainingDisplay } from '../lib/domain';
 
 export function CalorieRing({ consumed, target }: { consumed: number; target: number }) {
@@ -45,7 +45,7 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
         </View>
         <View style={{ position: 'absolute', alignItems: 'center' }}>
           <AppText variant="heroNumber">{formatKcal(shown.consumed)}</AppText>
-          <AppText variant="secondary" color={theme.colors.textSecondary}>/ {formatKcal(shown.target)} kcal</AppText>
+          <AppText variant="secondary" color={theme.colors.textSecondary}>{`/ ${withUnit(formatKcal(shown.target), 'kcal')}`}</AppText>
         </View>
       </View>
       <AppText variant="bodyMedium" color={over ? theme.colors.warningText : theme.colors.textSecondary}>

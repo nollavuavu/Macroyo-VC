@@ -269,8 +269,8 @@ describe('INFO: number text and feet/inches', () => {
     expect(normalizeFeetInches(5, 11.96)).toEqual({ feet: 6, inches: 0 });
     expect(normalizeFeetInches(5, 11.94)).toEqual({ feet: 5, inches: 11.9 });
     expect(normalizeFeetInches(0, 70.9)).toEqual({ feet: 5, inches: 10.9 });
-    expect(formatHeightCm(71.96 * CM_PER_IN, 'imperial')).toBe('6 ft 0 in');
-    expect(formatHeightCm(180, 'imperial')).toBe('5 ft 10.9 in');
+    expect(formatHeightCm(71.96 * CM_PER_IN, 'imperial')).toBe('6\u00a0ft\u00a00\u00a0in'); // no-break spaces: the unit never wraps away from its number
+    expect(formatHeightCm(180, 'imperial')).toBe('5\u00a0ft\u00a010.9\u00a0in');
   });
 });
 

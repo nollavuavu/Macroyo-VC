@@ -25,6 +25,8 @@ export default function TabLayout() {
           paddingBottom: insets.bottom,
           paddingTop: theme.spacing.xs + theme.spacing.xxs,
         },
+        // Labels stay one line at any system font size: the tab bar is a fixed-height control (Dynamic Type 200% would truncate them).
+        tabBarAllowFontScaling: false,
         tabBarLabelStyle: {
           fontFamily: theme.fontFamilies.bodyMedium,
           fontSize: theme.typography.caption.fontSize,

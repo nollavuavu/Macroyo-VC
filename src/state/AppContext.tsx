@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { getTheme, type Theme } from '../theme/theme';
 import { localDateISO } from '../lib/dates';
 import { getLocale, setLocale, subscribeLocale } from '../i18n/state';
+import { useI18n } from '../i18n/react';
 import { deviceLanguageTags, resolvePreference } from '../i18n/detect';
 import type { LanguagePref, Msg } from '../i18n/types';
 import {
@@ -172,5 +173,6 @@ export function useTheme(): Theme {
   const { data } = useApp();
   const appearance = data.profile?.appearance ?? 'system';
   const scheme = appearance === 'system' ? system : appearance;
-  return getTheme(scheme);
+  const { locale } = useI18n();
+  return getTheme(scheme, locale);
 }
