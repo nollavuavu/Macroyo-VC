@@ -326,7 +326,7 @@
   "profile.title": "Hồ sơ",
   "profile.finishOnboarding": "Hãy hoàn tất phần làm quen để chỉnh mục tiêu của bạn.",
   "profile.language": "Ngôn ngữ",
-  "profile.languageHint": "“Hệ thống” theo ngôn ngữ của thiết bị. Tên món ăn vẫn bằng tiếng Anh.",
+  "profile.languageHint": "“Tự động” theo ngôn ngữ của thiết bị. Tên món ăn vẫn bằng tiếng Anh.",
   "profile.appearance": "Giao diện",
   "profile.units": "Đơn vị",
   "profile.storedBody": "Chiều cao đã lưu {{height}}\u00a0cm · cân nặng {{weight}}\u00a0kg. Đổi đơn vị chỉ thay đổi cách hiển thị.",

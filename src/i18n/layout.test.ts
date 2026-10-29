@@ -46,6 +46,11 @@ describe('P1-2 / P2-9 short labels in fixed-width controls', () => {
     }
     expect(fi['appearance.system']).toBe('Järjestelmä'); // 3-way control has room
   });
+  it('the language hint names the option the picker actually shows', () => {
+    expect(fi['profile.languageHint']).toContain(fi['lang.system']);
+    expect(vi['profile.languageHint']).toContain(vi['lang.system']);
+    expect(en['profile.languageHint']).toContain(en['lang.system']);
+  });
   it('fi long buttons are short enough to stay on one line at 360 dp', () => {
     expect(fi['storage.eraseUnreadable']).toBe('Poista tiedot ja aloita alusta');
     expect(fi['profile.recalculate']).toBe('Laske tavoitteet uudelleen');

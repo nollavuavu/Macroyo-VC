@@ -326,7 +326,7 @@
   "profile.title": "Profiili",
   "profile.finishOnboarding": "Viimeistele aloitus muokataksesi tavoitteitasi.",
   "profile.language": "Kieli",
-  "profile.languageHint": "Järjestelmä seuraa laitteen kieltä. Ruokien nimet pysyvät englanniksi.",
+  "profile.languageHint": "”Auto” seuraa laitteen kieltä. Ruokien nimet pysyvät englanniksi.",
   "profile.appearance": "Ulkoasu",
   "profile.units": "Yksiköt",
   "profile.storedBody": "Tallennettu pituus {{height}}\u00a0cm · paino {{weight}}\u00a0kg. Yksikön vaihto muuttaa vain näkymää.",
