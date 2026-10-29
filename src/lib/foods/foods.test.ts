@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { formatFiber, loadFoods, matchRank, parseFoods, searchFoods } from './foods';
 
 describe('food loader', () => {
-  it('loads the USDA catalog, including the added egg foods', () => {
+  it('loads the USDA catalog (v2: 1,555 foods), including the added egg foods', () => {
     const foods = loadFoods();
-    expect(foods.length).toBe(622);
+    expect(foods.length).toBe(1555);
     expect(foods.find((food) => food.id === '1')?.name).toBe('Bacon, baked');
     expect(foods.find((food) => food.id === '622')?.name).toBe('Egg drop soup');
     expect(foods.find((food) => food.name === 'Quail egg, raw')).toBeTruthy();
