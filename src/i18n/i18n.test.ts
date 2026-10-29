@@ -118,8 +118,8 @@ describe('plural handling', () => {
   });
   it('vi: one category for everything, both forms say the same thing', () => {
     expect(pluralCategory('vi', 1)).toBe('other');
-    expect(translate('vi', 'today.copied', { count: 1 })).toBe('Đã chép 1 món từ hôm qua.');
-    expect(translate('vi', 'today.copied', { count: 5 })).toBe('Đã chép 5 món từ hôm qua.');
+    expect(translate('vi', 'today.copied', { count: 1 })).toBe('Đã sao chép 1 món từ hôm qua.');
+    expect(translate('vi', 'today.copied', { count: 5 })).toBe('Đã sao chép 5 món từ hôm qua.');
     for (const key of Object.keys(EN).filter((k) => k.endsWith('_one'))) {
       expect(OTHERS.vi[key], key).toBe(OTHERS.vi[key.replace(/_one$/, '_other')]);
     }

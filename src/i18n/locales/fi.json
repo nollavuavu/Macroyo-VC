@@ -180,7 +180,7 @@
   "limit.and": "{{a}} ja {{b}}",
   "projection.deficitUnavailable": "Ylläpito\u00adkalorisi ovat jo lähellä turvallista vähimmäismäärää, joten kaloreiden vajetta ei suositella. Harkitse lisää liikuntaa tai keskustele ammattilaisen kanssa.",
   "projection.bmiAtFloor": "BMI on jo enintään 18,5, joten vajeen ennustetta ei näytetä.",
-  "projection.offsetClamped": "Haluamasi vaje {{requested}}\u00a0kcal/pv ylittää turvallisen enimmäismäärän {{cap}}\u00a0kcal/pv (1\u00a0% painosta viikossa, 25\u00a0% TDEE:stä, kalorien alaraja). Ennuste käyttää arvoa {{used}}.",
+  "projection.offsetClamped": "Haluamasi vaje {{requested}}\u00a0kcal/pv ylittää turvallisen enimmäismäärän {{cap}}\u00a0kcal/pv (1\u00a0% painosta viikossa, 25\u00a0% TDEE:stä, kalorien alaraja). Ennuste käyttää arvoa {{used}}\u00a0kcal/pv.",
   "projection.surplusFat.abs": "Suuri ylijäämä (> +500\u00a0kcal): suuri osa painonnoususta on rasvaa, ei lihasta.",
   "projection.surplusFat.pct": "Suuri ylijäämä (> 15\u00a0% TDEE:stä): suuri osa painonnoususta on rasvaa, ei lihasta.",
   "projection.surplusFat.both": "Suuri ylijäämä (> +500\u00a0kcal ja > 15\u00a0% TDEE:stä): suuri osa painonnoususta on rasvaa, ei lihasta.",
