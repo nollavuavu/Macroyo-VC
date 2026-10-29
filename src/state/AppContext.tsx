@@ -3,6 +3,9 @@ import { useColorScheme as useSystemSchemeRN } from 'react-native';
 import { Platform } from 'react-native';
 import { getTheme, type Theme } from '../theme/theme';
 import { localDateISO } from '../lib/dates';
+import { getLocale, setLocale, subscribeLocale } from '../i18n/state';
+import { deviceLanguageTags, resolvePreference } from '../i18n/detect';
+import type { LanguagePref, Msg } from '../i18n/types';
 import {
   EMPTY_DATA,
   READ_FAILED_MESSAGE,
@@ -20,7 +23,7 @@ import {
 
 interface AppContextValue {
   ready: boolean;
-  error: string | null;
+  error: Msg | null;
   /** True when stored data could not be read: writes are blocked until resetAll. */
   readFailed: boolean;
   data: AppData;
@@ -37,6 +40,8 @@ interface AppContextValue {
   addBodyStat: (stat: BodyStat) => Promise<boolean>;
   deleteBodyStat: (id: string) => Promise<boolean>;
   resetAll: () => Promise<boolean>;
+  /** Persist the language preference and switch the UI language immediately. */
+  setLanguage: (language: LanguagePref) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -44,17 +49,27 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Msg | null>(null);
   const [readFailed, setReadFailed] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => localDateISO());
   const storeRef = useRef<StateStore | null>(null);
+
+  // Keep <html lang> in step with the UI language on web (screen readers pick pronunciation from it).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const apply = () => { document.documentElement.lang = getLocale(); };
+    apply();
+    return subscribeLocale(apply);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     openStore({ load: loadState, save: saveState, backupRaw: backupRawState }).then((store) => {
       if (cancelled) return;
       storeRef.current = store;
-      setData(store.get());
+      const loaded = store.get();
+      setLocale(resolvePreference(loaded.language ?? 'system', deviceLanguageTags()));
+      setData(loaded);
       if (store.loadError()) {
         setReadFailed(true);
         setError(READ_FAILED_MESSAGE);
@@ -107,12 +122,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     addBodyStat: (stat) => commit((cur) => ({ ...cur, bodyStats: [stat, ...cur.bodyStats] })),
     deleteBodyStat: (id) => commit((cur) => ({ ...cur, bodyStats: cur.bodyStats.filter((item) => item.id !== id) })),
+    setLanguage: async (language) => {
+      const ok = await commit((cur) => ({ ...cur, language }));
+      if (ok) setLocale(resolvePreference(language, deviceLanguageTags()));
+      return ok;
+    },
     resetAll: async () => {
       const store = storeRef.current;
       if (!store) return false;
       const result = await store.reset();
       if (result.ok) {
         setData(result.data);
+        setLocale(resolvePreference(result.data.language ?? 'system', deviceLanguageTags()));
         setReadFailed(false);
         setError(null);
         return true;

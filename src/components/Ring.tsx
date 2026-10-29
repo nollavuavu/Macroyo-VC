@@ -2,11 +2,13 @@ import Svg, { Circle } from 'react-native-svg';
 import { View } from 'react-native';
 import { AppText } from './ui';
 import { useTheme } from '../state/AppContext';
+import { useI18n } from '../i18n/react';
 import { formatKcal } from '../lib/format';
 import { remainingDisplay } from '../lib/domain';
 
 export function CalorieRing({ consumed, target }: { consumed: number; target: number }) {
   const theme = useTheme();
+  const { t } = useI18n();
   const size = Math.min(theme.sizes.calorieRing, 220);
   const stroke = 16;
   const radius = (size - stroke) / 2;
@@ -21,7 +23,7 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
     <View
       style={{ alignItems: 'center', gap: theme.spacing.sm }}
       accessible
-      accessibilityLabel={target > 0 ? `${formatKcal(shown.consumed)} of ${formatKcal(shown.target)} kilocalories` : `${formatKcal(shown.consumed)} kilocalories, no target set`}
+      accessibilityLabel={target > 0 ? t('ring.a11y', { consumed: formatKcal(shown.consumed), target: formatKcal(shown.target) }) : t('ring.a11yNoTarget', { consumed: formatKcal(shown.consumed) })}
     >
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ transform: [{ rotate: '-90deg' }] }}>
@@ -47,7 +49,7 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
         </View>
       </View>
       <AppText variant="bodyMedium" color={over ? theme.colors.warningText : theme.colors.textSecondary}>
-        {target <= 0 ? 'Set a calorie target in Profile' : over ? `${formatKcal(shown.amount)} over` : `${formatKcal(shown.amount)} left`}
+        {target <= 0 ? t('ring.setTarget') : over ? t('ring.over', { amount: formatKcal(shown.amount) }) : t('ring.left', { amount: formatKcal(shown.amount) })}
       </AppText>
     </View>
   );

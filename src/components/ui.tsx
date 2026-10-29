@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '../state/AppContext';
+import { useI18n } from '../i18n/react';
 import { borderStrong } from '../theme/extras';
 import type { Theme, TypographyKey } from '../theme/theme';
 
@@ -94,6 +95,7 @@ export function Screen({
 /** Shows save/read failures from the app store. When stored data was unreadable, offers the explicit reset. */
 export function StorageBanner() {
   const theme = useTheme();
+  const { t, tm } = useI18n();
   const { error, readFailed, resetAll } = useApp();
   if (!error) return null;
   return (
@@ -102,9 +104,9 @@ export function StorageBanner() {
       testID="storage-banner"
       style={{ paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm, gap: theme.spacing.sm }}
     >
-      <AppText variant="caption" color={theme.colors.warningText}>{error}</AppText>
+      <AppText variant="caption" color={theme.colors.warningText}>{tm(error)}</AppText>
       {readFailed ? (
-        <SecondaryButton label="Erase unreadable data and start fresh" onPress={() => { void resetAll(); }} testID="reset-unreadable" />
+        <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="reset-unreadable" />
       ) : null}
     </View>
   );
@@ -423,9 +425,10 @@ export function GroupLabel({ children }: { children: ReactNode }) {
 
 export function Disclaimer() {
   const theme = useTheme();
+  const { tm } = useI18n();
   return (
     <AppText variant="caption" color={theme.colors.textSecondary}>
-      {DISCLAIMER}
+      {tm(DISCLAIMER)}
     </AppText>
   );
 }

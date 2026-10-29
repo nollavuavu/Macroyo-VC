@@ -5,11 +5,14 @@ import { Drumstick, Droplets, Plus, Wheat } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderStrong } from '@/src/theme/extras';
 import { progressRatio, roundToSum, sumLogged } from '@/src/lib/domain';
-import { MEALS, MEAL_LABEL, addDays, dayAccessibilityLabel, formatLongDate, weekDates, type Meal } from '@/src/lib/dates';
+import { MEALS, MEAL_KEY, addDays, dayAccessibilityLabel, formatLongDate, weekDates, weekdayNarrow, type Meal } from '@/src/lib/dates';
 import { formatAmount, formatKcal } from '@/src/lib/format';
 import { formatFiber } from '@/src/lib/foods/foods';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
+import { useI18n } from '@/src/i18n/react';
+import { msg } from '@/src/i18n/msg';
+import type { Msg } from '@/src/i18n/types';
 import { AppText, Card, ProgressTrack, Screen, SecondaryButton } from '@/src/components/ui';
 import { CalorieRing } from '@/src/components/Ring';
 
@@ -21,10 +24,11 @@ const MACRO_ICON = {
 
 export default function TodayScreen() {
   const theme = useTheme();
+  const { t, tm } = useI18n();
   const insets = useSafeAreaInsets();
   const { data, addLog, selectedDate: date, setSelectedDate: setDate } = useApp();
   const profile = data.profile;
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<Msg | null>(null);
   const entries = data.logs.filter((entry) => entry.date === date);
   const totals = sumLogged(entries);
   const week = weekDates(date);
@@ -52,14 +56,14 @@ export default function TodayScreen() {
       const { id: _id, ...rest } = entry;
       await addLog({ ...rest, id: `${entry.id}-copy-${date}-${Math.random().toString(36).slice(2, 6)}`, date });
     }
-    setToast(`Copied ${previous.length} item${previous.length === 1 ? '' : 's'} from yesterday.`);
+    setToast(msg('today.copied', { count: previous.length }));
   }
 
   return (
     <View style={{ flex: 1 }}>
       <Screen testID="screen-today" fabClearance>
         <View>
-          <AppText variant="title">Today</AppText>
+          <AppText variant="title">{t('today.title')}</AppText>
           <AppText variant="secondary" color={theme.colors.textSecondary}>{formatLongDate(date)}</AppText>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -76,7 +80,7 @@ export default function TodayScreen() {
                 accessibilityState={{ selected }}
                 style={{ alignItems: 'center', gap: theme.spacing.xs, minWidth: theme.sizes.minTouchTarget, minHeight: theme.sizes.minTouchTarget + 20 }}
               >
-                <AppText variant="caption" color={theme.colors.textSecondary}>{['M', 'T', 'W', 'T', 'F', 'S', 'S'][week.indexOf(iso)]}</AppText>
+                <AppText variant="caption" color={theme.colors.textSecondary}>{weekdayNarrow(iso)}</AppText>
                 <View style={{
                   width: theme.sizes.minTouchTarget,
                   height: theme.sizes.minTouchTarget,
@@ -111,7 +115,7 @@ export default function TodayScreen() {
               <View key={key} style={{ gap: theme.spacing.xs }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Icon color={fill} size={18} strokeWidth={2} />
-                  <AppText variant="bodyMedium" style={{ flex: 1, textTransform: 'capitalize' }}>{key}</AppText>
+                  <AppText variant="bodyMedium" style={{ flex: 1 }}>{t(`macro.${key}`)}</AppText>
                   <AppText variant="macroGrams" color={text}>{formatAmount(consumed, 0)} / {formatAmount(target, 0)} g{target > 0 ? ` · ${Math.round(ratio * 100)}%` : ''}</AppText>
                 </View>
                 <ProgressTrack ratio={ratio} color={fill} />
@@ -119,7 +123,7 @@ export default function TodayScreen() {
             );
           })}
           <AppText variant="caption" color={theme.colors.textSecondary}>
-            Fiber {formatFiber(totals.fiberG)}{totals.fiberG == null && entries.length > 0 ? ' · not listed for every food' : ''}
+            {t('today.fiber', { fiber: formatFiber(totals.fiberG) })}{totals.fiberG == null && entries.length > 0 ? ` · ${t('today.fiberUnknown')}` : ''}
           </AppText>
         </Card>
 
@@ -130,13 +134,13 @@ export default function TodayScreen() {
               accessibilityIgnoresInvertColors
               style={{ width: 64, height: 64, borderRadius: 16, opacity: 0.9 }}
             />
-            <AppText variant="section">Nothing logged yet</AppText>
+            <AppText variant="section">{t('today.emptyTitle')}</AppText>
             <AppText variant="secondary" color={theme.colors.textSecondary} style={{ textAlign: 'center' }}>
-              Log your first meal and it will show up here, grouped by breakfast, lunch, dinner, and snack.
+              {t('today.emptyBody')}
             </AppText>
-            <SecondaryButton label="Log a meal" onPress={() => router.push({ pathname: '/log', params: { date } })} />
+            <SecondaryButton label={t('today.logMeal')} onPress={() => router.push({ pathname: '/log', params: { date } })} />
             {data.logs.some((entry) => entry.date === addDays(date, -1)) ? (
-              <SecondaryButton label="Copy yesterday" onPress={copyYesterday} />
+              <SecondaryButton label={t('today.copyYesterday')} onPress={copyYesterday} />
             ) : null}
           </Card>
         ) : (
@@ -147,7 +151,7 @@ export default function TodayScreen() {
               <Card key={meal} style={{ gap: theme.spacing.sm }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.sizes.minTouchTarget }}>
                   <View style={{ flex: 1 }}>
-                    <AppText variant="section">{MEAL_LABEL[meal]}</AppText>
+                    <AppText variant="section">{t(MEAL_KEY[meal])}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>{formatKcal(subtotal)} kcal</AppText>
                   </View>
                 </View>
@@ -155,13 +159,13 @@ export default function TodayScreen() {
                   <View key={item.id} style={{ paddingVertical: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
                     <AppText>{item.name}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>
-                      {formatAmount(item.grams)} g · {formatKcal(kcalDisplay.byId.get(item.id) ?? item.kcal)} kcal · P {formatAmount(item.proteinG)} · C {formatAmount(item.carbsG)} · F {formatAmount(item.fatG)} · fiber {formatFiber(item.fiberG)}
+                      {t('today.itemDetail', { grams: formatAmount(item.grams), kcal: formatKcal(kcalDisplay.byId.get(item.id) ?? item.kcal), p: formatAmount(item.proteinG), c: formatAmount(item.carbsG), f: formatAmount(item.fatG), fiber: formatFiber(item.fiberG) })}
                     </AppText>
                   </View>
                 ))}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Add to ${MEAL_LABEL[meal]}`}
+                  accessibilityLabel={t('log.addTo', { meal: t(MEAL_KEY[meal]) })}
                   onPress={() => router.push({ pathname: '/log', params: { meal, date } })}
                   style={{
                     position: 'absolute',
@@ -182,11 +186,11 @@ export default function TodayScreen() {
             );
           })
         )}
-        {toast ? <AppText variant="caption" color={theme.colors.primary}>{toast}</AppText> : null}
+        {toast ? <AppText variant="caption" color={theme.colors.primary}>{tm(toast)}</AppText> : null}
       </Screen>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Log food"
+        accessibilityLabel={t('today.logFood')}
         onPress={() => router.push({ pathname: '/log', params: { date } })}
         style={{
           position: 'absolute',

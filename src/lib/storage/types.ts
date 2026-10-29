@@ -1,5 +1,6 @@
 import type { ActivityLevel, BmrFormula, Goal, Sex, SexConstantChoice } from '../domain/nutrition';
 import type { Meal } from '../dates';
+import type { LanguagePref } from '../../i18n/types';
 
 export type UnitSystem = 'metric' | 'imperial';
 export type Appearance = 'system' | 'light' | 'dark';
@@ -68,6 +69,8 @@ export interface AppData {
   profile: Profile | null;
   logs: LogEntry[];
   bodyStats: BodyStat[];
+  /** UI language preference. Absent means follow the device (same as 'system'). */
+  language?: LanguagePref;
 }
 
 export const EMPTY_DATA: AppData = { profile: null, logs: [], bodyStats: [] };

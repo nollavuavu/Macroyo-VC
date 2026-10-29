@@ -22,17 +22,21 @@ import {
   type SexConstantChoice,
 } from '@/src/lib/domain';
 import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
-import { formatKcal } from '@/src/lib/format';
+import { formatFixed, formatInputNumber, formatKcal } from '@/src/lib/format';
+import { useI18n } from '@/src/i18n/react';
+import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
 import type { Profile } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow } from '@/src/components/ui';
 
-const STEPS = ['Welcome', 'Body', 'Activity', 'Goal', 'Plan'] as const;
+const STEPS = ['welcome', 'body', 'activity', 'goal', 'plan'] as const;
 
 export default function OnboardingScreen() {
   const theme = useTheme();
+  const { t, tm } = useI18n();
+  const text = (message?: Msg | null) => (message ? tm(message) : null);
   const { height: windowHeight } = useWindowDimensions();
-  const { ready, data, saveProfile } = useApp();
+  const { ready, data, saveProfile, setLanguage } = useApp();
   const [step, setStep] = useState(0);
   const [sex, setSex] = useState<Sex | null>(null);
   const [ageText, setAgeText] = useState('');
@@ -100,10 +104,10 @@ export default function OnboardingScreen() {
     if (step === 3 && goal === 'cut' && plan && !plan.goalAllowed) return;
     setShowErrors(false);
     if (step === 3 && plan) {
-      setKcalText(String(plan.kcal));
-      setProteinText(String(plan.proteinG));
-      setCarbText(String(plan.carbsG));
-      setFatTargetText(String(plan.fatG));
+      setKcalText(formatInputNumber(plan.kcal));
+      setProteinText(formatInputNumber(plan.proteinG));
+      setCarbText(formatInputNumber(plan.carbsG));
+      setFatTargetText(formatInputNumber(plan.fatG));
       setTargetsEdited(false);
     }
     setStep((value) => Math.min(value + 1, STEPS.length - 1));
@@ -158,7 +162,7 @@ export default function OnboardingScreen() {
     <Screen testID="screen-onboarding">
       <View style={{ gap: theme.spacing.sm }}>
         <AppText variant="caption" color={theme.colors.textSecondary}>
-          {step + 1} of {STEPS.length} · {STEPS[step]}
+          {t('onboarding.stepOf', { current: step + 1, total: STEPS.length, name: t(`onboarding.step.${STEPS[step]}`) })}
         </AppText>
         <View style={{ height: 4, borderRadius: 99, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
           <View style={{ width: `${((step + 1) / STEPS.length) * 100}%`, height: 4, backgroundColor: theme.colors.primary }} />
@@ -170,137 +174,145 @@ export default function OnboardingScreen() {
           <Image
             source={require('../assets/icon.png')}
             accessibilityIgnoresInvertColors
-            accessibilityLabel="Macroyo logo"
+            accessibilityLabel={t('onboarding.logoLabel')}
             style={{ width: 96, height: 96, borderRadius: 22 }}
           />
           <AppText variant="title" style={{ textAlign: 'center' }}>Macroyo</AppText>
-          <AppText style={{ textAlign: 'center' }}>Log meals fast. Hit your macros. Know your numbers.</AppText>
+          <AppText style={{ textAlign: 'center' }}>{t('onboarding.tagline')}</AppText>
           <Disclaimer />
+          <View style={{ alignSelf: 'stretch', gap: theme.spacing.sm }}>
+            <AppText variant="caption" color={theme.colors.textSecondary} style={{ textAlign: 'center' }}>{t('profile.language')}</AppText>
+            <Segmented
+              value={data.language ?? 'system'}
+              onChange={(language) => { void setLanguage(language); }}
+              options={LANGUAGE_PREFS.map((value) => ({ value, label: t(`lang.${value}`) }))}
+            />
+          </View>
         </View>
       ) : null}
 
       {step === 1 ? (
         <View style={{ gap: theme.spacing.lg }}>
-          <AppText variant="title">About you</AppText>
-          <AppText variant="secondary" color={theme.colors.textSecondary}>Sex is used only for the energy equation.</AppText>
+          <AppText variant="title">{t('onboarding.aboutYou')}</AppText>
+          <AppText variant="secondary" color={theme.colors.textSecondary}>{t('onboarding.sexNote')}</AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {(['female', 'male', 'unspecified'] as Sex[]).map((option) => (
-              <Chip key={option} label={option === 'unspecified' ? 'Unspecified' : option === 'female' ? 'Female' : 'Male'} selected={sex === option} onPress={() => setSex(option)} />
+              <Chip key={option} label={t(`sex.${option}`)} selected={sex === option} onPress={() => setSex(option)} />
             ))}
           </View>
-          {showErrors && !sex ? <AppText variant="caption" color={theme.colors.warningText}>Choose a sex option. Unspecified uses an average equation.</AppText> : null}
+          {showErrors && !sex ? <AppText variant="caption" color={theme.colors.warningText}>{t('onboarding.chooseSex')}</AppText> : null}
           <SexConstantPicker sex={sex} value={sexConstant} onChange={setSexConstant} />
-          <Field label="Age" value={ageText} onChangeText={setAgeText} keyboard="number" error={showErrors ? ageCheck.message : null} suffix="years" />
+          <Field label={t('common.age')} value={ageText} onChangeText={setAgeText} keyboard="number" error={showErrors ? text(ageCheck.message) : null} suffix={t('unit.years')} />
           {ageCheck.underage ? (
             <Card>
-              <AppText variant="section">Macroyo is for adults</AppText>
+              <AppText variant="section">{t('onboarding.adultsTitle')}</AppText>
               <AppText variant="secondary" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
-                Calorie targets and body-composition indexes are not built for people under 18. If you are under 18, please talk with a parent or guardian and a clinician. You can correct the age above if it was a typo.
+                {t('onboarding.adultsBody')}
               </AppText>
             </Card>
           ) : null}
           <Segmented
             value={units}
             onChange={setUnits}
-            options={[{ value: 'metric', label: 'Metric' }, { value: 'imperial', label: 'Imperial' }]}
+            options={[{ value: 'metric', label: t('units.metric') }, { value: 'imperial', label: t('units.imperial') }]}
           />
           {units === 'metric' ? (
-            <Field label="Height" value={heightText} onChangeText={setHeightText} suffix="cm" error={showErrors ? heightCheck.message : null} />
+            <Field label={t('common.height')} value={heightText} onChangeText={setHeightText} suffix="cm" error={showErrors ? text(heightCheck.message) : null} />
           ) : (
             <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Field label="Feet" value={feetText} onChangeText={setFeetText} keyboard="number" error={showErrors ? heightCheck.message : null} />
+                <Field label={t('common.feet')} value={feetText} onChangeText={setFeetText} keyboard="number" error={showErrors ? text(heightCheck.message) : null} />
               </View>
               <View style={{ flex: 1 }}>
-                <Field label="Inches" value={inchText} onChangeText={setInchText} error={showErrors && !heightCheck.ok ? ' ' : null} />
+                <Field label={t('common.inches')} value={inchText} onChangeText={setInchText} error={showErrors && !heightCheck.ok ? ' ' : null} />
               </View>
             </View>
           )}
-          <Field label="Weight" value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? weightCheck.message : null} />
-          <Field label="Body fat % (optional)" value={fatText} onChangeText={setFatText} suffix="%" placeholder="Skip if you don't know" error={showErrors ? fatCheck.message : null} />
-          <SwitchRow label="Pregnant or breastfeeding" value={pregnant} onValueChange={setPregnant} />
+          <Field label={t('common.weight')} value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? text(weightCheck.message) : null} />
+          <Field label={t('common.bodyFatOptional')} value={fatText} onChangeText={setFatText} suffix="%" placeholder={t('onboarding.bodyFatPlaceholder')} error={showErrors ? text(fatCheck.message) : null} />
+          <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
         </View>
       ) : null}
 
       {step === 2 ? (
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="title">Activity</AppText>
+          <AppText variant="title">{t('onboarding.activityTitle')}</AppText>
           {(Object.keys(ACTIVITY_DETAILS) as ActivityLevel[]).map((level) => (
             <Chip
               key={level}
-              label={ACTIVITY_DETAILS[level].label}
-              detail={ACTIVITY_DETAILS[level].description}
+              label={tm(ACTIVITY_DETAILS[level].label)}
+              detail={tm(ACTIVITY_DETAILS[level].description)}
               selected={activity === level}
               onPress={() => setActivity(level)}
             />
           ))}
-          {showErrors && !activity ? <AppText variant="caption" color={theme.colors.warningText}>Choose an activity level.</AppText> : null}
+          {showErrors && !activity ? <AppText variant="caption" color={theme.colors.warningText}>{t('onboarding.chooseActivity')}</AppText> : null}
         </View>
       ) : null}
 
       {step === 3 && plan ? (
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="title">Goal</AppText>
-          {bmi != null ? <AppText variant="secondary" color={theme.colors.textSecondary}>BMI {bmi.toFixed(1)} from the numbers you entered.</AppText> : null}
+          <AppText variant="title">{t('common.goal')}</AppText>
+          {bmi != null ? <AppText variant="secondary" color={theme.colors.textSecondary}>{t('onboarding.bmiLine', { bmi: formatFixed(bmi, 1) })}</AppText> : null}
           {(Object.keys(GOAL_DETAILS) as Goal[]).map((option) => {
             const blocked = option === 'cut' && (!plan.goalAllowed || pregnant || (bmi != null && bmi < 18.5) || plan.deficitUnavailable);
             const reason = option === 'cut' ? buildMacroPlan({ ...planInput(), goal: 'cut' }).goalBlockReason : null;
             return (
               <View key={option} style={{ gap: 4 }}>
                 <Chip
-                  label={GOAL_DETAILS[option].label}
-                  detail={GOAL_DETAILS[option].description}
+                  label={tm(GOAL_DETAILS[option].label)}
+                  detail={tm(GOAL_DETAILS[option].description)}
                   selected={goal === option}
                   disabled={blocked}
                   onPress={() => setGoal(option)}
                 />
-                {blocked && reason ? <AppText variant="caption" color={theme.colors.warningText}>{reason}</AppText> : null}
+                {blocked && reason ? <AppText variant="caption" color={theme.colors.warningText}>{tm(reason)}</AppText> : null}
               </View>
             );
           })}
-          {showErrors && !goal ? <AppText variant="caption" color={theme.colors.warningText}>Choose a goal.</AppText> : null}
+          {showErrors && !goal ? <AppText variant="caption" color={theme.colors.warningText}>{t('onboarding.chooseGoal')}</AppText> : null}
         </View>
       ) : null}
 
       {step === 4 && plan ? (
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="title">Your plan</AppText>
+          <AppText variant="title">{t('onboarding.planTitle')}</AppText>
           <Card>
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={(value) => { setFormulaChoice(value); setTargetsEdited(false); }} />
             <AppText variant="metricNumber" style={{ marginTop: 8 }}>{formatKcal(plan.tdee)}</AppText>
-            <AppText variant="caption" color={theme.colors.textSecondary}>Maintenance kcal, from BMR {formatKcal(plan.bmr)}</AppText>
-            {plan.capped && plan.capReason ? <AppText variant="caption" color={theme.colors.warningText} style={{ marginTop: 8 }}>{plan.capReason}</AppText> : null}
+            <AppText variant="caption" color={theme.colors.textSecondary}>{t('onboarding.maintenance', { bmr: formatKcal(plan.bmr) })}</AppText>
+            {plan.capped && plan.capReason ? <AppText variant="caption" color={theme.colors.warningText} style={{ marginTop: 8 }}>{tm(plan.capReason)}</AppText> : null}
           </Card>
-          <Field label="Calories" value={targetsEdited ? kcalText : String(plan.kcal)} onChangeText={(value) => { setTargetsEdited(true); setKcalText(value); }} suffix="kcal" error={targetError('kcal')} />
-          <Field label="Protein" value={targetsEdited ? proteinText : String(plan.proteinG)} onChangeText={(value) => { setTargetsEdited(true); setProteinText(value); }} suffix="g" error={targetError('proteinG')} />
-          <Field label="Carbs" value={targetsEdited ? carbText : String(plan.carbsG)} onChangeText={(value) => { setTargetsEdited(true); setCarbText(value); }} suffix="g" error={targetError('carbsG')} />
-          <Field label="Fat" value={targetsEdited ? fatTargetText : String(plan.fatG)} onChangeText={(value) => { setTargetsEdited(true); setFatTargetText(value); }} suffix="g" error={targetError('fatG')} />
+          <Field label={t('common.calories')} value={targetsEdited ? kcalText : formatInputNumber(plan.kcal)} onChangeText={(value) => { setTargetsEdited(true); setKcalText(value); }} suffix="kcal" error={targetError('kcal')} />
+          <Field label={t('macro.protein')} value={targetsEdited ? proteinText : formatInputNumber(plan.proteinG)} onChangeText={(value) => { setTargetsEdited(true); setProteinText(value); }} suffix="g" error={targetError('proteinG')} />
+          <Field label={t('macro.carbs')} value={targetsEdited ? carbText : formatInputNumber(plan.carbsG)} onChangeText={(value) => { setTargetsEdited(true); setCarbText(value); }} suffix="g" error={targetError('carbsG')} />
+          <Field label={t('macro.fat')} value={targetsEdited ? fatTargetText : formatInputNumber(plan.fatG)} onChangeText={(value) => { setTargetsEdited(true); setFatTargetText(value); }} suffix="g" error={targetError('fatG')} />
           <AppText variant="caption" color={theme.colors.textSecondary}>
-            Suggested split is about {plan.proteinG} g protein ({plan.proteinPerKg} g/kg), {plan.fatG} g fat, {plan.carbsG} g carbs. Fiber is a soft goal of {plan.fiberG} g. Macros at those grams are {plan.macroKcal} kcal.
+            {t('onboarding.splitNote', { protein: plan.proteinG, perKg: plan.proteinPerKg, fat: plan.fatG, carbs: plan.carbsG, fiber: plan.fiberG, kcal: plan.macroKcal })}
           </AppText>
           {plan.proteinCapped && !targetsEdited ? (
             <AppText variant="caption" color={theme.colors.textSecondary}>
-              Protein was limited to 35% of calories ({plan.proteinG} g instead of {plan.proteinUncappedG} g from {plan.proteinPerKg} g/kg), because that body weight over-counts protein on a lower target.
+              {t('onboarding.proteinLimited', { protein: plan.proteinG, uncapped: plan.proteinUncappedG, perKg: plan.proteinPerKg })}
             </AppText>
           ) : null}
           {plan.fatTrimmed && !targetsEdited ? (
-            <AppText variant="caption" color={theme.colors.textSecondary}>Fat was lowered toward its minimum so carbs would not go below zero.</AppText>
+            <AppText variant="caption" color={theme.colors.textSecondary}>{t('onboarding.fatTrimmed')}</AppText>
           ) : null}
           {targetNotices(shownDraft).map((notice) => (
-            <AppText key={notice.message} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>
-              {notice.message}
+            <AppText key={notice.message.key} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>
+              {tm(notice.message)}
             </AppText>
           ))}
         </View>
       ) : null}
 
       <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-        {step > 0 ? <View style={{ flex: 1 }}><SecondaryButton label="Back" onPress={() => { setShowErrors(false); setStep((value) => value - 1); }} testID="onboarding-back" /></View> : null}
+        {step > 0 ? <View style={{ flex: 1 }}><SecondaryButton label={t('common.back')} onPress={() => { setShowErrors(false); setStep((value) => value - 1); }} testID="onboarding-back" /></View> : null}
         <View style={{ flex: 1 }}>
           {step < STEPS.length - 1 ? (
-            <PrimaryButton label={step === 0 ? 'Get started' : 'Next'} onPress={next} disabled={step === 1 && ageCheck.underage} testID="onboarding-next" />
+            <PrimaryButton label={step === 0 ? t('onboarding.getStarted') : t('common.next')} onPress={next} disabled={step === 1 && ageCheck.underage} testID="onboarding-next" />
           ) : (
-            <PrimaryButton label="Start tracking" onPress={finish} testID="onboarding-finish" />
+            <PrimaryButton label={t('onboarding.startTracking')} onPress={finish} testID="onboarding-finish" />
           )}
         </View>
       </View>
@@ -330,7 +342,7 @@ export default function OnboardingScreen() {
       carbsG: parseDecimal(carbText),
       fatG: parseDecimal(fatTargetText),
     }, sex, plan.bmr, weightKg, plan.tdee, plan.goal);
-    return review.issues.find((issue) => issue.field === field && issue.blocking)?.message ?? null;
+    return text(review.issues.find((issue) => issue.field === field && issue.blocking)?.message);
   }
 }
 

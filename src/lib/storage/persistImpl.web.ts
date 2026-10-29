@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EMPTY_DATA, type AppData } from './types';
+import { isLanguagePref } from '../../i18n/types';
 
 const KEY = 'macroyo.v1';
 
@@ -11,6 +12,7 @@ export async function loadState(): Promise<AppData> {
     profile: parsed.profile ?? null,
     logs: parsed.logs ?? [],
     bodyStats: parsed.bodyStats ?? [],
+    ...(isLanguagePref(parsed.language) ? { language: parsed.language } : {}),
   };
 }
 

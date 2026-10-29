@@ -5,13 +5,14 @@
  * - If the stored data could not be read, the raw blob is copied to a backup key and writes are blocked
  *   until the user explicitly resets, so existing history is never overwritten.
  */
+import { msg } from '../../i18n/msg';
+import type { Msg } from '../../i18n/types';
 import { EMPTY_DATA, type AppData } from './types';
 
-export const SAVE_FAILED_MESSAGE = 'Could not save on this device. Your last change was not applied.';
-export const READ_FAILED_MESSAGE =
-  'Saved data could not be read. A backup copy was kept and nothing new will be saved until you reset the app data.';
+export const SAVE_FAILED_MESSAGE: Msg = msg('storage.saveFailed');
+export const READ_FAILED_MESSAGE: Msg = msg('storage.readFailed');
 
-export type CommitResult = { ok: true; data: AppData } | { ok: false; error: string };
+export type CommitResult = { ok: true; data: AppData } | { ok: false; error: Msg };
 
 export interface StoreDeps {
   load: () => Promise<AppData>;
@@ -59,7 +60,7 @@ export async function openStore(deps: StoreDeps): Promise<StateStore> {
     }
   }
 
-  const failure = (error: string): CommitResult => ({ ok: false, error });
+  const failure = (error: Msg): CommitResult => ({ ok: false, error });
 
   return {
     get: () => data,

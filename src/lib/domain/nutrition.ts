@@ -3,6 +3,10 @@
  * Metric internally. Display conversions live here so the UI stays free of formulas.
  */
 
+import { getLocale } from '../../i18n/state';
+import { msg, type MessageKey } from '../../i18n/msg';
+import { numberSymbols } from '../../i18n/numbers';
+import type { Locale, Msg } from '../../i18n/types';
 import {
   DEFICIT_UNAVAILABLE_MESSAGE,
   bmrMifflin,
@@ -32,18 +36,18 @@ export type Goal = 'cut' | 'maintain' | 'bulk';
 export type BmrFormula = 'mifflin' | 'katch';
 export type Sex = ProjectionSex;
 
-export const ACTIVITY_DETAILS: Record<ActivityLevel, { label: string; description: string }> = {
-  sedentary: { label: 'Sedentary', description: 'Little or no exercise, desk job' },
-  light: { label: 'Lightly active', description: 'Light exercise 1–3 days a week' },
-  moderate: { label: 'Moderately active', description: 'Moderate exercise 3–5 days a week' },
-  very: { label: 'Very active', description: 'Hard exercise 6–7 days a week' },
-  extra: { label: 'Extra active', description: 'Very hard training plus a physical job' },
+export const ACTIVITY_DETAILS: Record<ActivityLevel, { label: Msg; description: Msg }> = {
+  sedentary: { label: msg('activity.sedentary'), description: msg('activity.sedentary.desc') },
+  light: { label: msg('activity.light'), description: msg('activity.light.desc') },
+  moderate: { label: msg('activity.moderate'), description: msg('activity.moderate.desc') },
+  very: { label: msg('activity.very'), description: msg('activity.very.desc') },
+  extra: { label: msg('activity.extra'), description: msg('activity.extra.desc') },
 };
 
-export const GOAL_DETAILS: Record<Goal, { label: string; description: string }> = {
-  cut: { label: 'Lose fat', description: 'About 20% under maintenance' },
-  maintain: { label: 'Maintain', description: 'Eat at maintenance' },
-  bulk: { label: 'Build muscle', description: 'About 10% over maintenance' },
+export const GOAL_DETAILS: Record<Goal, { label: Msg; description: Msg }> = {
+  cut: { label: msg('goal.cut'), description: msg('goal.cut.desc') },
+  maintain: { label: msg('goal.maintain'), description: msg('goal.maintain.desc') },
+  bulk: { label: msg('goal.bulk'), description: msg('goal.bulk.desc') },
 };
 
 export function lbToKg(lb: number): number {
@@ -95,27 +99,43 @@ export function cmToFeetInches(cm: number): { feet: number; inches: number } {
 }
 
 /**
- * True for text like "1,234" or "12,345": one to three digits, a comma, exactly three digits.
- * That could be a thousands separator (1234) or a decimal comma (1.234), so we refuse to guess.
- * A leading 0 ("0,125") is unambiguous and stays a decimal.
+ * True for text like "1,234" or "12,345" (one to three digits, a comma, exactly three digits), and in
+ * Vietnamese also "1.234", where "." is the thousands mark. Such text could be a thousands separator
+ * (1234) or a decimal (1.234), so we refuse to guess. A leading 0 ("0,125") is unambiguous and stays a decimal.
+ * "1.234" stays a plain decimal in English and Finnish, where "." is never a thousands mark.
  */
-export function isAmbiguousThousands(raw: string): boolean {
-  return /^[-+]?[1-9]\d{0,2},\d{3}$/.test(raw.trim());
+export function isAmbiguousThousands(raw: string, locale: Locale = getLocale()): boolean {
+  const text = raw.trim();
+  if (/^[-+]?[1-9]\d{0,2},\d{3}$/.test(text)) return true;
+  return locale === 'vi' && /^[-+]?[1-9]\d{0,2}\.\d{3}$/.test(text);
 }
 
+/** Finnish writes thousands with a space ("2 500"). It is unambiguous, so it is accepted: "2 500,5" is 2500.5. */
+const FINNISH_GROUPED = /^([-+]?)(\d{1,3}(?:[ \u00a0\u202f]\d{3})+)([.,]\d+)?$/;
+
 /**
- * Accepts 80, 80.5, 80,5, ".5" and "80." (a trailing separator while typing).
- * Returns null for empty or non-numeric text, internal spaces ("80 5"), and "1,234"-style text,
- * which is ambiguous between a thousands separator and a decimal comma. Rejecting is the safe
- * choice: a weight of 1.234 kg or a calorie target of 1234 would both be silent mistakes.
+ * Accepts 80, 80.5, 80,5, ".5" and "80." (a trailing separator while typing): both "." and "," work
+ * as the decimal mark in every language, because phone keyboards differ from the UI language.
+ * Returns null for empty or non-numeric text, for internal spaces ("80 5"; Finnish thousands groups of
+ * three like "2 500" excepted), and for ambiguous "1,234"-style text (see isAmbiguousThousands).
+ * Rejecting is the safe choice: a weight of 1.234 kg or a calorie target of 1234 would both be silent mistakes.
  */
-export function parseDecimal(raw: string): number | null {
-  const text = raw.trim();
+export function parseDecimal(raw: string, locale: Locale = getLocale()): number | null {
+  let text = raw.trim();
   if (!text) return null;
-  if (isAmbiguousThousands(text)) return null;
+  if (isAmbiguousThousands(text, locale)) return null;
+  if (locale === 'fi') {
+    const grouped = FINNISH_GROUPED.exec(text);
+    if (grouped) text = `${grouped[1]}${grouped[2].replace(/[ \u00a0\u202f]/g, '')}${grouped[3] ?? ''}`;
+  }
   if (!/^[-+]?(\d+([.,]\d*)?|[.,]\d+)$/.test(text)) return null;
   const value = Number(text.replace(',', '.'));
   return Number.isFinite(value) ? value : null;
+}
+
+/** The decimal mark to show in hints for a locale ("," for Vietnamese and Finnish). */
+export function decimalMark(locale: Locale = getLocale()): string {
+  return numberSymbols(locale).decimal;
 }
 
 export function bmiMetric(weightKg: number, heightCm: number): number | null {
@@ -130,9 +150,9 @@ export function bmiImperial(weightLb: number, heightIn: number): number | null {
 
 export interface BmiClass {
   /** Large label. "Obesity range" instead of shouting the class. */
-  label: string;
+  label: Msg;
   /** Smaller WHO detail, including thinness and obese class. */
-  detail: string | null;
+  detail: Msg | null;
   /** Stable WHO name used by tests: Underweight, Normal, Overweight, Obese class I/II/III. */
   who: string;
 }
@@ -144,14 +164,14 @@ export function bmiCategory(bmi: number): BmiClass {
     if (Math.abs(bmi - boundary) < 1e-8) value = boundary;
   }
   bmi = value;
-  if (bmi < 16) return { label: 'Underweight', detail: 'Severe thinness', who: 'Underweight' };
-  if (bmi < 17) return { label: 'Underweight', detail: 'Moderate thinness', who: 'Underweight' };
-  if (bmi < 18.5) return { label: 'Underweight', detail: 'Mild thinness', who: 'Underweight' };
-  if (bmi < 25) return { label: 'Normal', detail: null, who: 'Normal' };
-  if (bmi < 30) return { label: 'Overweight', detail: null, who: 'Overweight' };
-  if (bmi < 35) return { label: 'Obesity range', detail: 'Obese class I', who: 'Obese class I' };
-  if (bmi < 40) return { label: 'Obesity range', detail: 'Obese class II', who: 'Obese class II' };
-  return { label: 'Obesity range', detail: 'Obese class III', who: 'Obese class III' };
+  if (bmi < 16) return { label: msg('bmi.underweight'), detail: msg('bmi.severeThinness'), who: 'Underweight' };
+  if (bmi < 17) return { label: msg('bmi.underweight'), detail: msg('bmi.moderateThinness'), who: 'Underweight' };
+  if (bmi < 18.5) return { label: msg('bmi.underweight'), detail: msg('bmi.mildThinness'), who: 'Underweight' };
+  if (bmi < 25) return { label: msg('bmi.normal'), detail: null, who: 'Normal' };
+  if (bmi < 30) return { label: msg('bmi.overweight'), detail: null, who: 'Overweight' };
+  if (bmi < 35) return { label: msg('bmi.obesity'), detail: msg('bmi.obeseI'), who: 'Obese class I' };
+  if (bmi < 40) return { label: msg('bmi.obesity'), detail: msg('bmi.obeseII'), who: 'Obese class II' };
+  return { label: msg('bmi.obesity'), detail: msg('bmi.obeseIII'), who: 'Obese class III' };
 }
 
 /** Colour role for BMI text: green only for the normal band, amber otherwise. Never red. */
@@ -179,9 +199,10 @@ export function normalizedFfmi(ffmi: number, heightCm: number): number {
 }
 
 export interface FfmiReading {
+  /** Stable id of the band (English, never displayed): used by tests and to pick the label. */
   band: string | null;
-  label: string;
-  detail: string;
+  label: Msg;
+  detail: Msg;
   /** Bands are only meaningful for men. */
   banded: boolean;
 }
@@ -193,26 +214,17 @@ export interface FfmiReading {
  */
 export function interpretFfmi(sex: Sex, normalized: number): FfmiReading {
   if (sex !== 'male') {
-    return {
-      band: null,
-      label: 'Not banded',
-      detail: 'These ranges come from studies of men and are not validated for women. The number is shown on its own.',
-      banded: false,
-    };
+    return { band: null, label: msg('ffmi.notBanded'), detail: msg('ffmi.notBanded.detail'), banded: false };
   }
   const shown = roundHalfUp(normalized, 1);
   let band = 'Above the range usually reported';
-  if (shown < 18) band = 'Below average';
-  else if (shown < 20) band = 'Average';
-  else if (shown < 22) band = 'Above average';
-  else if (shown < 23) band = 'Excellent';
-  else if (shown <= 25) band = 'Superior';
-  return {
-    band,
-    label: band,
-    detail: 'Informal coaching ranges for men, not a medical category.',
-    banded: true,
-  };
+  let key: MessageKey = 'ffmi.aboveRange';
+  if (shown < 18) { band = 'Below average'; key = 'ffmi.belowAverage'; }
+  else if (shown < 20) { band = 'Average'; key = 'ffmi.average'; }
+  else if (shown < 22) { band = 'Above average'; key = 'ffmi.aboveAverage'; }
+  else if (shown < 23) { band = 'Excellent'; key = 'ffmi.excellent'; }
+  else if (shown <= 25) { band = 'Superior'; key = 'ffmi.superior'; }
+  return { band, label: msg(key), detail: msg('ffmi.men.detail'), banded: true };
 }
 
 export function katchMcArdle(leanKg: number): number {
@@ -280,15 +292,15 @@ export interface MacroPlan {
   bmr: number;
   tdee: number;
   formula: BmrFormula;
-  formulaNote: string;
+  formulaNote: Msg;
   bmi: number;
   goal: Goal;
   goalAllowed: boolean;
-  goalBlockReason: string | null;
+  goalBlockReason: Msg | null;
   rawKcal: number;
   kcal: number;
   capped: boolean;
-  capReason: string | null;
+  capReason: Msg | null;
   proteinG: number;
   fatG: number;
   carbsG: number;
@@ -347,18 +359,18 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
   const bmi = bmiMetric(input.weightKg, input.heightCm) ?? 0;
   const mifflinSex = mifflinSexFor(input.sex, input.sexConstant);
   let bmr = bmrMifflin(input.weightKg, input.heightCm, input.age, mifflinSex);
-  let formulaNote = 'Mifflin–St Jeor.';
+  let formulaNote: Msg = msg('plan.formula.mifflin');
   if (input.sex === 'unspecified') {
     formulaNote = mifflinSex === 'male'
-      ? 'Mifflin–St Jeor with the male constant (+5), which you chose because sex was left unspecified.'
+      ? msg('plan.formula.mifflinMale')
       : mifflinSex === 'female'
-        ? 'Mifflin–St Jeor with the female constant (−161), which you chose because sex was left unspecified.'
-        : 'Mifflin–St Jeor with an average constant (−78), because sex was left unspecified. You can pick the male or female constant instead.';
+        ? msg('plan.formula.mifflinFemale')
+        : msg('plan.formula.mifflinAverage');
   }
   if (formula === 'katch' && input.bodyFatPct != null) {
     const lean = leanMassKg(input.weightKg, input.bodyFatPct);
     bmr = katchMcArdle(lean);
-    formulaNote = 'Katch–McArdle, because body fat is entered. Lean or muscular people are often closer to this estimate.';
+    formulaNote = msg('plan.formula.katch');
   }
   const tdee = tdeeFromBmr(bmr, input.activity);
   const floor = effectiveCalorieFloor(input.sex, bmr, tdee);
@@ -366,12 +378,12 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
   const maxOffset = maxSafeOffset(input.weightKg, input.heightCm, tdee, bmr, projectionSex, floor);
   const deficitUnavailable = maxOffset < 100;
 
-  let goalBlockReason: string | null = null;
+  let goalBlockReason: Msg | null = null;
   if (input.goal === 'cut') {
     if (input.pregnant) {
-      goalBlockReason = 'A calorie deficit is not offered during pregnancy or breastfeeding. Please talk with your clinician.';
+      goalBlockReason = msg('plan.block.pregnant');
     } else if (bmi < 18.5) {
-      goalBlockReason = `BMI is ${roundHalfUp(bmi, 1).toFixed(1)}, under 18.5. A cut is not offered. Maintenance or a surplus is available, and a clinician is the right next step.`;
+      goalBlockReason = msg('plan.block.bmi', { bmi: roundHalfUp(bmi, 1) });
     } else if (deficitUnavailable) {
       goalBlockReason = DEFICIT_UNAVAILABLE_MESSAGE;
     }
@@ -383,13 +395,13 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
 
   let kcalExact = rawKcal;
   let capped = false;
-  let capReason: string | null = null;
+  let capReason: Msg | null = null;
   if (effectiveGoal === 'cut') {
     const limited = tdee - maxOffset;
     if (kcalExact < limited - 1e-6) {
       kcalExact = limited;
       capped = true;
-      capReason = `The 20% cut would pass a safety limit, so the target is held at ${Math.round(limited)} kcal. The tightest limit is ${roundHalfUp(maxOffset, 1).toFixed(1)} kcal under maintenance.`;
+      capReason = msg('plan.capReason', { kcal: Math.round(limited), offset: roundHalfUp(maxOffset, 1) });
     }
   }
 
@@ -465,7 +477,7 @@ export interface TargetDraft {
 export interface TargetIssue {
   field: 'kcal' | 'proteinG' | 'carbsG' | 'fatG';
   blocking: boolean;
-  message: string;
+  message: Msg;
 }
 
 /** Carbs under this many grams get a standalone warning (spec 2.4: "under 50 g/day"). */
@@ -490,9 +502,7 @@ export function targetNotices(draft: TargetDraft): TargetIssue[] {
     issues.push({
       field: 'carbsG',
       blocking: false,
-      message: draft.carbsG < LOW_CARB_WARNING_G
-        ? 'Carbs are under 50 g. That is very low for most people. Consider raising calories or lowering fat or protein. This is a warning, not a block.'
-        : 'Carbs are under 100 g. That can be hard to sustain. This is a warning, not a block.',
+      message: draft.carbsG < LOW_CARB_WARNING_G ? msg('targets.carbsUnder50') : msg('targets.carbsUnder100'),
     });
   }
   if (
@@ -512,8 +522,8 @@ export function targetNotices(draft: TargetDraft): TargetIssue[] {
         field: 'kcal',
         blocking: false,
         message: diff > 0
-          ? `Protein, carbs, and fat add up to ${Math.round(energy)} kcal, which is above the ${Math.round(draft.kcal)} kcal target.`
-          : `Protein, carbs, and fat add up to ${Math.round(energy)} kcal, which is below the ${Math.round(draft.kcal)} kcal target. About ${Math.round(-diff)} kcal is not assigned to any macro.`,
+          ? msg('targets.macrosAbove', { energy: Math.round(energy), kcal: Math.round(draft.kcal) })
+          : msg('targets.macrosBelow', { energy: Math.round(energy), kcal: Math.round(draft.kcal), gap: Math.round(-diff) }),
       });
     }
   }
@@ -532,29 +542,24 @@ export function assessTargets(
   const floor = effectiveCalorieFloor(sex, bmr, tdee);
   const floorShown = lowestPassingWhole(floor);
   if (draft.kcal == null) {
-    issues.push({ field: 'kcal', blocking: true, message: 'Enter a calorie target.' });
+    issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalMissing') });
   } else if (draft.kcal <= 0) {
-    issues.push({ field: 'kcal', blocking: true, message: 'Calorie target has to be above 0.' });
+    issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalZero') });
   } else if (draft.kcal > 10000) {
-    issues.push({ field: 'kcal', blocking: true, message: 'That target is above 10,000 kcal. Enter a smaller number.' });
+    issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalTooHigh') });
   } else if (draft.kcal + 0.5 < floor) {
     issues.push({
       field: 'kcal',
       blocking: true,
-      message: `That is below the ${floorShown} kcal floor for this profile. ${floorShown} kcal is the lowest target Macroyo will save.`,
+      message: msg('targets.kcalFloor', { floor: floorShown }),
     });
   }
 
-  const grams: ['proteinG' | 'carbsG' | 'fatG', string][] = [
-    ['proteinG', 'Protein'],
-    ['carbsG', 'Carbs'],
-    ['fatG', 'Fat'],
-  ];
-  for (const [field, label] of grams) {
+  for (const field of ['proteinG', 'carbsG', 'fatG'] as const) {
     const value = draft[field];
-    if (value == null) issues.push({ field, blocking: true, message: `Enter ${label.toLowerCase()} grams.` });
-    else if (value < 0) issues.push({ field, blocking: true, message: `${label} cannot be negative.` });
-    else if (value > 2000) issues.push({ field, blocking: true, message: `${label} is above 2,000 g. Check the number.` });
+    if (value == null) issues.push({ field, blocking: true, message: msg(`targets.missing.${field}`) });
+    else if (value < 0) issues.push({ field, blocking: true, message: msg(`targets.negative.${field}`) });
+    else if (value > 2000) issues.push({ field, blocking: true, message: msg(`targets.tooHigh.${field}`) });
   }
 
   if (draft.kcal != null && draft.kcal > 0 && draft.fatG != null && draft.fatG >= 0 && weightKg > 0) {
@@ -563,7 +568,7 @@ export function assessTargets(
       issues.push({
         field: 'fatG',
         blocking: true,
-        message: `Fat is below the floor of ${lowestPassingWhole(floorG)} g (the larger of 20% of calories and 0.6 g/kg).`,
+        message: msg('targets.fatFloor', { grams: lowestPassingWhole(floorG) }),
       });
     }
   }
@@ -576,7 +581,7 @@ export function assessTargets(
       issues.push({
         field: 'fatG',
         blocking: false,
-        message: `Fat is below the ${Math.ceil(cutDefault - 0.5)} g (0.8 g/kg) Macroyo suggests on a cut. This is a warning, not a block.`,
+        message: msg('targets.fatBelowCutDefault', { grams: Math.ceil(cutDefault - 0.5) }),
       });
     }
   }
@@ -641,38 +646,38 @@ export function progressRatio(consumed: number, target: number): number {
 
 export interface FieldCheck {
   ok: boolean;
-  message: string | null;
+  message: Msg | null;
   /** Under-18 is a hard stop, not a typo. */
   underage?: boolean;
 }
 
 export function validateAge(value: number | null): FieldCheck {
-  if (value == null) return { ok: false, message: 'Enter your age.' };
+  if (value == null) return { ok: false, message: msg('validate.age.missing') };
   if (!Number.isFinite(value) || value < 0 || value > 120) {
-    return { ok: false, message: 'Enter an age from 18 to 120.' };
+    return { ok: false, message: msg('validate.age.range') };
   }
   if (value < 18) {
     return {
       ok: false,
       underage: true,
-      message: 'Macroyo is for adults 18 and older. Calorie targets and body-composition numbers are not appropriate under 18.',
+      message: msg('validate.age.underage'),
     };
   }
   return { ok: true, message: null };
 }
 
 export function validateHeightCm(value: number | null): FieldCheck {
-  if (value == null) return { ok: false, message: 'Enter your height.' };
+  if (value == null) return { ok: false, message: msg('validate.height.missing') };
   if (!(value >= 100 && value <= 250)) {
-    return { ok: false, message: 'Enter a height from 100 to 250 cm.' };
+    return { ok: false, message: msg('validate.height.range') };
   }
   return { ok: true, message: null };
 }
 
 export function validateWeightKg(value: number | null): FieldCheck {
-  if (value == null) return { ok: false, message: 'Enter your weight.' };
+  if (value == null) return { ok: false, message: msg('validate.weight.missing') };
   if (!(value >= 30 && value <= 300)) {
-    return { ok: false, message: 'Enter a weight from 30 to 300 kg.' };
+    return { ok: false, message: msg('validate.weight.range') };
   }
   return { ok: true, message: null };
 }
@@ -680,18 +685,18 @@ export function validateWeightKg(value: number | null): FieldCheck {
 export function validateBodyFat(value: number | null, required = false): FieldCheck {
   if (value == null) {
     return required
-      ? { ok: false, message: 'Enter body fat from 3 to 60%.' }
+      ? { ok: false, message: msg('validate.bodyFat.required') }
       : { ok: true, message: null };
   }
   if (!(value >= 3 && value <= 60)) {
-    return { ok: false, message: 'Enter body fat from 3 to 60%, or leave it blank.' };
+    return { ok: false, message: msg('validate.bodyFat.range') };
   }
   return { ok: true, message: null };
 }
 
 export function validatePortionGrams(value: number | null): FieldCheck {
-  if (value == null) return { ok: false, message: 'Enter grams as a number.' };
-  if (!(value > 0) || value > 5000) return { ok: false, message: 'Enter a portion from just above 0 g up to 5,000 g.' };
+  if (value == null) return { ok: false, message: msg('validate.portion.missing') };
+  if (!(value > 0) || value > 5000) return { ok: false, message: msg('validate.portion.range') };
   return { ok: true, message: null };
 }
 
@@ -710,25 +715,24 @@ export type QuickAddField = 'name' | 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | '
 export const MAX_ENTRY_MACRO_G = 2000;
 
 /** Field-keyed errors for a quick add. validateQuickAdd and the inline messages both come from here. */
-export function quickAddFieldErrors(input: QuickAddInput): Partial<Record<QuickAddField, string>> {
-  const errors: Partial<Record<QuickAddField, string>> = {};
-  if (!input.name.trim()) errors.name = 'Enter a name.';
-  else if (input.name.trim().length > 200) errors.name = 'Use a name of 200 characters or fewer.';
-  if (input.kcal == null) errors.kcal = 'Enter calories as a number.';
-  else if (input.kcal < 0) errors.kcal = 'Calories cannot be negative.';
-  else if (input.kcal > 10000) errors.kcal = 'One entry cannot be over 10,000 kcal.';
-  for (const [field, label, value] of [
-    ['proteinG', 'protein', input.proteinG],
-    ['carbsG', 'carbs', input.carbsG],
-    ['fatG', 'fat', input.fatG],
+export function quickAddFieldErrors(input: QuickAddInput): Partial<Record<QuickAddField, Msg>> {
+  const errors: Partial<Record<QuickAddField, Msg>> = {};
+  if (!input.name.trim()) errors.name = msg('quickAdd.name.missing');
+  else if (input.name.trim().length > 200) errors.name = msg('quickAdd.name.tooLong');
+  if (input.kcal == null) errors.kcal = msg('quickAdd.kcal.missing');
+  else if (input.kcal < 0) errors.kcal = msg('quickAdd.kcal.negative');
+  else if (input.kcal > 10000) errors.kcal = msg('quickAdd.kcal.tooHigh');
+  for (const [field, value] of [
+    ['proteinG', input.proteinG],
+    ['carbsG', input.carbsG],
+    ['fatG', input.fatG],
   ] as const) {
-    const title = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
-    if (value == null) errors[field] = `Enter ${label} as a number, or 0.`;
-    else if (value < 0) errors[field] = `${title} cannot be negative.`;
-    else if (value > MAX_ENTRY_MACRO_G) errors[field] = `${title} is above 2,000 g. Check the number.`;
+    if (value == null) errors[field] = msg(`quickAdd.missing.${field}`);
+    else if (value < 0) errors[field] = msg(`quickAdd.negative.${field}`);
+    else if (value > MAX_ENTRY_MACRO_G) errors[field] = msg(`quickAdd.tooHigh.${field}`);
   }
-  if (input.fiberG != null && input.fiberG < 0) errors.fiberG = 'Fiber cannot be negative.';
-  else if (input.fiberG != null && input.fiberG > MAX_ENTRY_MACRO_G) errors.fiberG = `Fiber is above 2,000 g. Check the number.`;
+  if (input.fiberG != null && input.fiberG < 0) errors.fiberG = msg('quickAdd.negative.fiberG');
+  else if (input.fiberG != null && input.fiberG > MAX_ENTRY_MACRO_G) errors.fiberG = msg('quickAdd.tooHigh.fiberG');
   const grams = validatePortionGrams(input.grams);
   if (!grams.ok && grams.message) errors.grams = grams.message;
   // Protein, carbs and fat cannot weigh more than the portion itself (0.5 g of slack for rounding).
@@ -740,13 +744,13 @@ export function quickAddFieldErrors(input: QuickAddInput): Partial<Record<QuickA
   ) {
     const total = input.proteinG + input.carbsG + input.fatG;
     if (total > input.grams + 0.5) {
-      errors.grams = `Protein, carbs and fat add up to ${roundHalfUp(total, 1)} g, which is more than the ${roundHalfUp(input.grams, 1)} g portion. Check the numbers or raise the portion.`;
+      errors.grams = msg('quickAdd.macrosExceedPortion', { total: roundHalfUp(total, 1), grams: roundHalfUp(input.grams, 1) });
     }
   }
   return errors;
 }
 
-export function quickAddMismatch(input: QuickAddInput): string | null {
+export function quickAddMismatch(input: QuickAddInput): Msg | null {
   if (
     input.kcal != null &&
     input.proteinG != null &&
@@ -759,20 +763,20 @@ export function quickAddMismatch(input: QuickAddInput): string | null {
   ) {
     const energy = macroEnergy(input.proteinG, input.carbsG, input.fatG);
     if (Math.abs(energy - input.kcal) > Math.max(10, input.kcal * 0.1)) {
-      return `Those macros add up to about ${Math.round(energy)} kcal, not ${Math.round(input.kcal)}.`;
+      return msg('quickAdd.mismatch', { energy: Math.round(energy), kcal: Math.round(input.kcal) });
     }
   }
   return null;
 }
 
-export function validateQuickAdd(input: QuickAddInput): { issues: string[]; mismatch: string | null } {
+export function validateQuickAdd(input: QuickAddInput): { issues: Msg[]; mismatch: Msg | null } {
   const issues = Object.values(quickAddFieldErrors(input));
   return { issues, mismatch: quickAddMismatch(input) };
 }
 
 export type QuickAddDecision =
-  | { action: 'errors'; errors: Partial<Record<QuickAddField, string>> }
-  | { action: 'confirm'; warning: string }
+  | { action: 'errors'; errors: Partial<Record<QuickAddField, Msg>> }
+  | { action: 'confirm'; warning: Msg }
   | { action: 'save' };
 
 /**
@@ -804,19 +808,23 @@ export function validateTypedMeasure(
   kind: TypedMeasureKind,
   raw: string,
   units: 'metric' | 'imperial',
-): { ok: boolean; value: number | null; message: string | null } {
+): { ok: boolean; value: number | null; message: Msg | null } {
   const range = TYPED_RANGE[kind];
   const imperial = units === 'imperial' && kind !== 'age';
-  const unit = kind === 'age' ? 'years' : kind === 'height' ? (imperial ? 'in' : 'cm') : imperial ? 'lb' : 'kg';
   const lo = imperial ? (kind === 'height' ? Math.ceil(range.min / CM_PER_IN) : Math.ceil(range.min / KG_PER_LB)) : range.min;
   const hi = imperial ? (kind === 'height' ? Math.floor(range.max / CM_PER_IN) : Math.floor(range.max / KG_PER_LB)) : range.max;
-  const rangeText = `Enter ${kind === 'age' ? 'an' : 'a'} ${kind} from ${lo} to ${hi} ${unit}.`;
+  const rangeKey: MessageKey = kind === 'age'
+    ? 'validate.typed.range.age'
+    : kind === 'height'
+      ? (imperial ? 'validate.typed.range.height.in' : 'validate.typed.range.height.cm')
+      : imperial ? 'validate.typed.range.weight.lb' : 'validate.typed.range.weight.kg';
+  const rangeText = msg(rangeKey, { min: lo, max: hi });
   const parsed = parseDecimal(raw);
   if (parsed == null) {
     const message = isAmbiguousThousands(raw)
-      ? 'Type the number without a thousands separator, like 180 or 80.5.'
+      ? msg('validate.noThousands')
       : raw.trim() === ''
-        ? `Enter your ${kind}.`
+        ? msg(`validate.typed.missing.${kind}`)
         : rangeText;
     return { ok: false, value: null, message };
   }
@@ -826,7 +834,7 @@ export function validateTypedMeasure(
 }
 
 /** Preview of a cut that the safety rules will not offer. Useful for explanations. */
-export function explainCutBlock(input: PlanInput): string | null {
+export function explainCutBlock(input: PlanInput): Msg | null {
   return buildMacroPlan({ ...input, goal: 'cut' }).goalBlockReason;
 }
 

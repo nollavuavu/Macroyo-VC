@@ -3,6 +3,9 @@
  * Pure TypeScript. Do not change the arithmetic without updating the golden vectors.
  */
 
+import { msg } from '../../i18n/msg';
+import type { Msg } from '../../i18n/types';
+
 export const KCAL_PER_KG = 7700;
 export const LB_PER_KG = 2.20462;
 export const BMI_FLOOR = 18.5;
@@ -13,6 +16,7 @@ export const STATIC_MAX_DAYS = 30.44;
 
 export const DEFAULT_HORIZONS = [7, 30.44, 91.3, 182.6, 365.25] as const;
 
+/** Stable ids for the horizons. Display text comes from `horizonMsg`, never from these. */
 export const HORIZON_LABELS: Record<string, string> = {
   '7': '1 wk',
   '30.44': '1 mo',
@@ -54,7 +58,7 @@ export interface ProjectionWarning {
     | 'OFFSET_CLAMPED'
     | 'SURPLUS_MOSTLY_FAT'
     | 'BMI_FLOOR_REACHED';
-  message: string;
+  message: Msg;
   horizons?: string[];
 }
 
@@ -100,8 +104,8 @@ export interface ProjectionResult {
 }
 
 /** Shortest round-trip decimal, then half-up (away from zero) to 0.1. Matches Python Decimal(repr(float)). */
-export const DEFICIT_UNAVAILABLE_MESSAGE =
-  "Your maintenance calories are already close to the minimum safe intake, so a calorie deficit isn't recommended. Consider more activity, or talk to a professional.";
+/** Message key and no params: the sentence itself lives in the locale files (projection.deficitUnavailable). */
+export const DEFICIT_UNAVAILABLE_MESSAGE: Msg = msg('projection.deficitUnavailable');
 
 export function roundHalfUp1(x: number): number {
   if (!Number.isFinite(x)) return x;
@@ -307,6 +311,20 @@ export function projectWeeklyMifflin(
   });
 }
 
+const HORIZON_KEYS = {
+  '7': 'horizon.week',
+  '30.44': 'horizon.month',
+  '91.3': 'horizon.threeMonths',
+  '182.6': 'horizon.sixMonths',
+  '365.25': 'horizon.year',
+} as const;
+
+/** Display name of a projection horizon ("1 wk", "1 mo", ..., or "N d" for a custom number of days). */
+export function horizonMsg(days: number): Msg {
+  const key = HORIZON_KEYS[String(days) as keyof typeof HORIZON_KEYS];
+  return key ? msg(key) : msg('horizon.days', { count: days });
+}
+
 function horizonLabel(days: number): string {
   return HORIZON_LABELS[String(days)] ?? `${formatG(days)} d`;
 }
@@ -314,11 +332,6 @@ function horizonLabel(days: number): string {
 function formatG(value: number): string {
   if (Number.isInteger(value)) return String(value);
   return String(value);
-}
-
-function formatFixed(value: number, decimals: number): string {
-  const rounded = roundHalfUp(value, decimals);
-  return rounded.toFixed(decimals);
 }
 
 export function projectV1(input: ProjectionInput): ProjectionResult {
@@ -345,7 +358,7 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
     if (input.weight_kg <= wmin) {
       warnings.push({
         code: 'BMI_AT_OR_BELOW_FLOOR',
-        message: 'BMI is already at or below 18.5; no deficit projection.',
+        message: msg('projection.bmiAtFloor'),
       });
     }
     if (deficitUnavailable) {
@@ -358,7 +371,11 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
       effective = -cap;
       warnings.push({
         code: 'OFFSET_CLAMPED',
-        message: `Requested deficit ${formatG(-input.daily_offset_kcal)} kcal/day exceeds the safe maximum ${formatFixed(cap, 1)} kcal/day (1% body weight/week, 25% of TDEE, calorie floor); projection uses ${formatFixed(effective, 2)}.`,
+        message: msg('projection.offsetClamped', {
+          requested: -input.daily_offset_kcal,
+          cap: roundHalfUp(cap, 1),
+          used: roundHalfUp(-effective, 2),
+        }),
       });
     }
   }
@@ -367,12 +384,11 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
     input.daily_offset_kcal > 0 &&
     (input.daily_offset_kcal > SURPLUS_ABS_KCAL || input.daily_offset_kcal > SURPLUS_PCT_TDEE * tdee)
   ) {
-    const why: string[] = [];
-    if (input.daily_offset_kcal > SURPLUS_ABS_KCAL) why.push('> +500 kcal');
-    if (input.daily_offset_kcal > SURPLUS_PCT_TDEE * tdee) why.push('> 15% of TDEE');
+    const overAbs = input.daily_offset_kcal > SURPLUS_ABS_KCAL;
+    const overPct = input.daily_offset_kcal > SURPLUS_PCT_TDEE * tdee;
     warnings.push({
       code: 'SURPLUS_MOSTLY_FAT',
-      message: `Large surplus (${why.join(' and ')}): much of the gain will be fat, not muscle.`,
+      message: msg(overAbs && overPct ? 'projection.surplusFat.both' : overAbs ? 'projection.surplusFat.abs' : 'projection.surplusFat.pct'),
     });
   }
 
@@ -409,7 +425,7 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
     warnings.push({
       code: 'BMI_FLOOR_REACHED',
       horizons: clamped.map((row) => row.label),
-      message: `Projection stopped at a healthy minimum BMI (${formatFixed(wmin, 1)} kg) from ${clamped[0].label} onward.`,
+      message: msg('projection.bmiFloorReached', { weight: roundHalfUp(wmin, 1), horizon: horizonMsg(clamped[0].horizon_days) }),
     });
   }
 
@@ -441,14 +457,15 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
   };
 }
 
-/** Which guardrail is the tightest, for the calorie-calculator copy. */
-export function bindingLimit(components: OffsetComponents, cap: number): string {
-  if (!components.bmi_allows_deficit) return 'BMI is already at or below 18.5';
-  const options: [string, number][] = [
-    ['1% of body weight per week', components.one_pct_bw_per_week],
-    ['25% of maintenance', components.quarter_of_tdee],
-    ['the calorie floor', components.calorie_floor_room],
+/** Which guardrail is the tightest, for the calorie-calculator copy. Returns a message, not text. */
+export function bindingLimit(components: OffsetComponents, cap: number): Msg {
+  if (!components.bmi_allows_deficit) return msg('limit.bmi');
+  const options: [Msg, number][] = [
+    [msg('limit.onePct'), components.one_pct_bw_per_week],
+    [msg('limit.quarter'), components.quarter_of_tdee],
+    [msg('limit.floor'), components.calorie_floor_room],
   ];
   const names = options.filter(([, value]) => Math.abs(value - cap) <= 1e-6).map(([name]) => name);
-  return names.join(' and ') || 'the combined safety limits';
+  if (names.length === 0) return msg('limit.combined');
+  return names.reduce((joined, name) => msg('limit.and', { a: joined, b: name }));
 }

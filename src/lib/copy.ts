@@ -1,2 +1,4 @@
-export const DISCLAIMER =
-  'Not medical advice. Estimates can be off by 10% or more. Consult a qualified professional before changing your diet.';
+import { msg } from '../i18n/msg';
+
+/** The medical disclaimer. The sentence itself lives in the locale files (key `disclaimer`). */
+export const DISCLAIMER = msg('disclaimer');

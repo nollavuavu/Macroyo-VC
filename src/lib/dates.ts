@@ -1,12 +1,19 @@
+import { DATE_TAG } from '../i18n/numbers';
+import { getLocale } from '../i18n/state';
+import { translate } from '../i18n/translate';
+import type { MessageKey } from '../i18n/msg';
+import type { Locale } from '../i18n/types';
+
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export const MEALS: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-export const MEAL_LABEL: Record<Meal, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
+/** Catalog keys for the meal names. Translate with t(MEAL_KEY[meal]). */
+export const MEAL_KEY: Record<Meal, MessageKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snack',
 };
 
 export function localDateISO(date = new Date()): string {
@@ -27,42 +34,52 @@ export function addDays(iso: string, days: number): string {
   return localDateISO(date);
 }
 
-export function weekdayShort(iso: string): string {
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][parseLocalDate(iso).getDay()] ?? '';
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormat(locale: Locale, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const id = `${locale}|${JSON.stringify(options)}`;
+  let format = formatters.get(id);
+  if (!format) {
+    format = new Intl.DateTimeFormat(DATE_TAG[locale], options);
+    formatters.set(id, format);
+  }
+  return format;
 }
 
-const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** Short weekday in the locale: "Wed", "Th 4", "ke". */
+export function weekdayShort(iso: string, locale: Locale = getLocale()): string {
+  return dateFormat(locale, { weekday: 'short' }).format(parseLocalDate(iso));
+}
 
-/** "Today", "Yesterday", "Tomorrow", else "Wed 28 Oct". Deterministic English, no locale. */
-export function friendlyDate(iso: string, today: string = localDateISO()): string {
-  if (iso === today) return 'Today';
-  if (iso === addDays(today, -1)) return 'Yesterday';
-  if (iso === addDays(today, 1)) return 'Tomorrow';
-  const date = parseLocalDate(iso);
-  return `${weekdayShort(iso)} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+/** One-letter weekday for the week strip ("W", "T4", "K"), straight from Intl. */
+export function weekdayNarrow(iso: string, locale: Locale = getLocale()): string {
+  return dateFormat(locale, { weekday: 'narrow' }).format(parseLocalDate(iso));
+}
+
+/** "Today", "Yesterday", "Tomorrow", else the weekday, day and month in the locale ("Wed 28 Oct"). */
+export function friendlyDate(iso: string, today: string = localDateISO(), locale: Locale = getLocale()): string {
+  if (iso === today) return translate(locale, 'date.today');
+  if (iso === addDays(today, -1)) return translate(locale, 'date.yesterday');
+  if (iso === addDays(today, 1)) return translate(locale, 'date.tomorrow');
+  return dateFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(parseLocalDate(iso));
 }
 
 /** Short axis label: "28 Oct". */
-export function shortDate(iso: string): string {
-  const date = parseLocalDate(iso);
-  return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+export function shortDate(iso: string, locale: Locale = getLocale()): string {
+  return dateFormat(locale, { day: 'numeric', month: 'short' }).format(parseLocalDate(iso));
 }
 
-/** Screen-reader label for a day cell: "Friday 30 October, 2 meals logged". */
-export function dayAccessibilityLabel(iso: string, entryCount: number): string {
-  const date = parseLocalDate(iso);
-  const base = `${WEEKDAYS_LONG[date.getDay()]} ${date.getDate()} ${MONTHS_LONG[date.getMonth()]}`;
-  return `${base}, ${entryCount === 0 ? 'nothing logged' : `${entryCount} ${entryCount === 1 ? 'item' : 'items'} logged`}`;
-}
-
-export function formatLongDate(iso: string): string {
-  return parseLocalDate(iso).toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
+/** Screen-reader label for a day cell: "Friday 30 October, 2 items logged". */
+export function dayAccessibilityLabel(iso: string, entryCount: number, locale: Locale = getLocale()): string {
+  const base = dateFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(parseLocalDate(iso));
+  return translate(locale, 'date.dayLabel', {
+    date: base,
+    logged: translate(locale, entryCount === 0 ? 'date.nothingLogged' : 'date.itemsLogged', { count: entryCount }),
   });
+}
+
+export function formatLongDate(iso: string, locale: Locale = getLocale()): string {
+  return dateFormat(locale, { weekday: 'long', month: 'long', day: 'numeric' }).format(parseLocalDate(iso));
 }
 
 /** Monday-first week containing the date. */

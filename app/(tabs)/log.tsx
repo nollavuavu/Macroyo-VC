@@ -8,8 +8,11 @@ import {
   validatePortionGrams,
   type QuickAddField,
 } from '@/src/lib/domain';
-import { MEALS, MEAL_LABEL, addDays, friendlyDate, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
-import { formatAmount, formatKcal } from '@/src/lib/format';
+import { MEALS, MEAL_KEY, addDays, friendlyDate, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
+import { formatAmount, formatInputNumber, formatKcal } from '@/src/lib/format';
+import { useI18n } from '@/src/i18n/react';
+import { msg } from '@/src/i18n/msg';
+import type { Msg } from '@/src/i18n/types';
 import { entryFromPer100, entryFromTotals, scalePortion } from '@/src/lib/logging';
 import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
 import { motion } from '@/src/theme/theme';
@@ -34,6 +37,8 @@ interface EditFields {
 
 export default function LogScreen() {
   const theme = useTheme();
+  const { t, tm } = useI18n();
+  const text = (message?: Msg | null) => (message ? tm(message) : null);
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
   const { data, addLog, updateLog, deleteLog, restoreLog, selectedDate: date, setSelectedDate: setDate } = useApp();
   const initialMeal = isMeal(params.meal) ? params.meal : mealForHour(new Date().getHours());
@@ -55,17 +60,17 @@ export default function LogScreen() {
   const [quickF, setQuickF] = useState('');
   const [quickFiber, setQuickFiber] = useState('');
   const [quickGrams, setQuickGrams] = useState('100');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [quickErrors, setQuickErrors] = useState<Partial<Record<QuickAddField, string>>>({});
+  const [formError, setFormError] = useState<Msg | null>(null);
+  const [quickErrors, setQuickErrors] = useState<Partial<Record<QuickAddField, Msg>>>({});
   const [shown, setShown] = useState(SEARCH_PAGE_SIZE);
   useEffect(() => setShown(SEARCH_PAGE_SIZE), [debounced]);
   const [undo, setUndo] = useState<{ entry: LogEntry; index: number } | null>(null);
-  const [quickWarning, setQuickWarning] = useState<string | null>(null);
+  const [quickWarning, setQuickWarning] = useState<Msg | null>(null);
   // Editing any quick-add number withdraws the warning so it never describes stale numbers.
   useEffect(() => setQuickWarning(null), [quickName, quickKcal, quickP, quickC, quickF, quickFiber, quickGrams]);
   const [edit, setEdit] = useState<EditFields | null>(null);
-  const [editErrors, setEditErrors] = useState<Partial<Record<QuickAddField, string>>>({});
-  const [editWarning, setEditWarning] = useState<string | null>(null);
+  const [editErrors, setEditErrors] = useState<Partial<Record<QuickAddField, Msg>>>({});
+  const [editWarning, setEditWarning] = useState<Msg | null>(null);
 
   const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
   const results = allResults.slice(0, shown);
@@ -74,7 +79,7 @@ export default function LogScreen() {
   function openFood(food: Food) {
     setEditing(null);
     setSelected(food);
-    setGramsText(food.servingSizeG ? String(food.servingSizeG) : '100');
+    setGramsText(food.servingSizeG ? formatInputNumber(food.servingSizeG) : '100');
     setFormError(null);
     setQuick(false);
   }
@@ -82,7 +87,7 @@ export default function LogScreen() {
   function openEdit(entry: LogEntry) {
     setSelected(null);
     setEditing(entry);
-    setGramsText(String(entry.grams));
+    setGramsText(formatInputNumber(entry.grams));
     setFormError(null);
     setEdit({ name: entry.name, touched: false, kcal: '', protein: '', carbs: '', fat: '', fiber: '' });
     setEditErrors({});
@@ -124,11 +129,11 @@ export default function LogScreen() {
       parseDecimal(gramsText),
     );
     return {
-      kcal: shown ? String(shown.kcal) : '',
-      protein: shown ? String(shown.protein) : '',
-      carbs: shown ? String(shown.carbs) : '',
-      fat: shown ? String(shown.fat) : '',
-      fiber: shown?.fiber == null ? '' : String(shown.fiber),
+      kcal: shown ? formatInputNumber(shown.kcal) : '',
+      protein: shown ? formatInputNumber(shown.protein) : '',
+      carbs: shown ? formatInputNumber(shown.carbs) : '',
+      fat: shown ? formatInputNumber(shown.fat) : '',
+      fiber: shown?.fiber == null ? '' : formatInputNumber(shown.fiber),
     };
   }
 
@@ -153,7 +158,7 @@ export default function LogScreen() {
     };
     const decision = quickAddDecision(input, confirmed || !edit.touched);
     const errors = decision.action === 'errors' ? decision.errors : {};
-    if (fiberText !== '' && input.fiberG == null) errors.fiberG = 'Enter fiber as a number, or leave it blank.';
+    if (fiberText !== '' && input.fiberG == null) errors.fiberG = msg('quickAdd.fiber.notNumber');
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       setEditWarning(null);
@@ -199,7 +204,7 @@ export default function LogScreen() {
     };
     const decision = quickAddDecision(input, confirmed);
     const errors = decision.action === 'errors' ? decision.errors : {};
-    if (fiberText !== '' && input.fiberG == null) errors.fiberG = 'Enter fiber as a number, or leave it blank if you do not know it.';
+    if (fiberText !== '' && input.fiberG == null) errors.fiberG = msg('quickAdd.fiber.notNumber');
     if (Object.keys(errors).length > 0) {
       setQuickErrors(errors);
       setFormError(null);
@@ -264,48 +269,48 @@ export default function LogScreen() {
 
   return (
     <Screen testID="screen-log">
-      <AppText variant="title">Log</AppText>
+      <AppText variant="title">{t('log.title')}</AppText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
         {MEALS.map((option) => (
-          <Chip key={option} label={MEAL_LABEL[option]} selected={meal === option} onPress={() => setMeal(option)} />
+          <Chip key={option} label={t(MEAL_KEY[option])} selected={meal === option} onPress={() => setMeal(option)} />
         ))}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Previous day" onPress={() => setDate(addDays(date, -1))} style={dayButtonStyle}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('log.previousDay')} onPress={() => setDate(addDays(date, -1))} style={dayButtonStyle}>
           <ChevronLeft color={theme.colors.primary} size={22} strokeWidth={2.2} />
         </Pressable>
         <AppText variant="bodyMedium">{friendlyDate(date)}</AppText>
-        <Pressable accessibilityRole="button" accessibilityLabel="Next day" onPress={() => setDate(addDays(date, 1))} style={dayButtonStyle}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('log.nextDay')} onPress={() => setDate(addDays(date, 1))} style={dayButtonStyle}>
           <ChevronRight color={theme.colors.primary} size={22} strokeWidth={2.2} />
         </Pressable>
       </View>
 
-      <Field label="Search foods" accessibilityLabel="Search foods" value={query} onChangeText={setQuery} keyboard="default" placeholder="Try baked bacon" />
+      <Field label={t('log.searchFoods')} accessibilityLabel={t('log.searchFoods')} value={query} onChangeText={setQuery} keyboard="default" placeholder={t('log.searchPlaceholder')} />
 
       {selected || editing ? (
         <Card style={{ gap: theme.spacing.md }}>
           <AppText variant="section">{editing ? editing.name : selected?.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
-            {editing ? 'Editing this entry' : `${formatAmount(selected?.kcalPer100g ?? 0, 0)} kcal per 100 g`}
+            {editing ? t('log.editingEntry') : t('log.kcalPer100', { kcal: formatAmount(selected?.kcalPer100g ?? 0, 0) })}
             {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${formatAmount(selected.servingSizeG)} g)` : ''}
           </AppText>
           {editing && edit ? (
-            <Field label="Name" value={edit.name} onChangeText={(text) => setEdit({ ...edit, name: text })} error={editErrors.name} keyboard="default" />
+            <Field label={t('common.name')} value={edit.name} onChangeText={(value) => setEdit({ ...edit, name: value })} error={text(editErrors.name)} keyboard="default" />
           ) : null}
-          <Field label="Grams" value={gramsText} onChangeText={setGramsText} suffix="g" error={formError ?? editErrors.grams} />
+          <Field label={t('log.grams')} value={gramsText} onChangeText={setGramsText} suffix="g" error={text(formError ?? editErrors.grams)} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
-              <Chip label={selected.servingLabel ?? 'Serving'} detail={`${formatAmount(selected.servingSizeG)} g`} selected={gramsText === String(selected.servingSizeG)} onPress={() => setGramsText(String(selected.servingSizeG))} />
+              <Chip label={selected.servingLabel ?? t('log.serving')} detail={`${formatAmount(selected.servingSizeG)} g`} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
             ) : null}
             {[50, 100, 150, 200].map((grams) => (
-              <Chip key={grams} label={`${grams} g`} selected={gramsText === String(grams) && gramsText !== String(selected?.servingSizeG ?? '')} onPress={() => setGramsText(String(grams))} />
+              <Chip key={grams} label={`${grams} g`} selected={gramsText === formatInputNumber(grams) && gramsText !== (selected?.servingSizeG ? formatInputNumber(selected.servingSizeG) : '')} onPress={() => setGramsText(formatInputNumber(grams))} />
             ))}
           </View>
           {preview ? (
             <View style={{ gap: theme.spacing.xs }}>
               <AppText variant="bodyMedium">{formatKcal(preview.kcal)} kcal</AppText>
               <MacroTokens protein={preview.protein} carbs={preview.carbs} fat={preview.fat} />
-              <AppText variant="caption" color={theme.colors.textSecondary}>Fiber {formatFiber(preview.fiber)} g</AppText>
+              <AppText variant="caption" color={theme.colors.textSecondary}>{t('log.fiberPreview', { fiber: formatFiber(preview.fiber) })}</AppText>
             </View>
           ) : null}
           {editing && edit ? (
@@ -314,61 +319,61 @@ export default function LogScreen() {
                 const shown = editedMacros();
                 return (
                   <>
-                    <Field label="Calories" value={shown.kcal} onChangeText={(text) => changeEdit('kcal', text)} error={editErrors.kcal} suffix="kcal" />
-                    <Field label="Protein" value={shown.protein} onChangeText={(text) => changeEdit('protein', text)} error={editErrors.proteinG} labelColor={theme.macroColors.protein} suffix="g" />
-                    <Field label="Carbs" value={shown.carbs} onChangeText={(text) => changeEdit('carbs', text)} error={editErrors.carbsG} labelColor={theme.macroColors.carbs} suffix="g" />
-                    <Field label="Fat" value={shown.fat} onChangeText={(text) => changeEdit('fat', text)} error={editErrors.fatG} labelColor={theme.macroColors.fat} suffix="g" />
-                    <Field label="Fiber (blank if unknown)" value={shown.fiber} onChangeText={(text) => changeEdit('fiber', text)} error={editErrors.fiberG} suffix="g" />
+                    <Field label={t('common.calories')} value={shown.kcal} onChangeText={(value) => changeEdit('kcal', value)} error={text(editErrors.kcal)} suffix="kcal" />
+                    <Field label={t('macro.protein')} value={shown.protein} onChangeText={(value) => changeEdit('protein', value)} error={text(editErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" />
+                    <Field label={t('macro.carbs')} value={shown.carbs} onChangeText={(value) => changeEdit('carbs', value)} error={text(editErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" />
+                    <Field label={t('macro.fat')} value={shown.fat} onChangeText={(value) => changeEdit('fat', value)} error={text(editErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" />
+                    <Field label={t('log.fiberBlank')} value={shown.fiber} onChangeText={(value) => changeEdit('fiber', value)} error={text(editErrors.fiberG)} suffix="g" />
                   </>
                 );
               })()}
               {editWarning ? (
-                <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert">{editWarning} Fix the numbers, or save it as entered.</AppText>
+                <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert">{tm(editWarning)} {t('log.fixOrSave')}</AppText>
               ) : null}
             </View>
           ) : null}
           {editing && editWarning ? (
-            <PrimaryButton label="Save anyway" onPress={() => { const grams = parseDecimal(gramsText); if (grams != null) void saveEdit(grams, true); }} />
+            <PrimaryButton label={t('log.saveAnyway')} onPress={() => { const grams = parseDecimal(gramsText); if (grams != null) void saveEdit(grams, true); }} />
           ) : (
-          <PrimaryButton label={editing ? 'Save changes' : `Add to ${MEAL_LABEL[meal]}`} onPress={savePortion} testID="add-food" />
+          <PrimaryButton label={editing ? t('log.saveChanges') : t('log.addTo', { meal: t(MEAL_KEY[meal]) })} onPress={savePortion} testID="add-food" />
           )}
-          <SecondaryButton label="Cancel" onPress={() => { setSelected(null); setEditing(null); setEdit(null); setFormError(null); setEditErrors({}); setEditWarning(null); }} />
+          <SecondaryButton label={t('common.cancel')} onPress={() => { setSelected(null); setEditing(null); setEdit(null); setFormError(null); setEditErrors({}); setEditWarning(null); }} />
         </Card>
       ) : null}
 
-      <Chip label={quick ? 'Hide quick add' : 'Quick add'} selected={quick} onPress={() => { setQuick((value) => !value); setSelected(null); setEditing(null); }} />
+      <Chip label={quick ? t('log.hideQuickAdd') : t('log.quickAdd')} selected={quick} onPress={() => { setQuick((value) => !value); setSelected(null); setEditing(null); }} />
       {quick ? (
         <Card style={{ gap: theme.spacing.md }}>
-          <AppText variant="section">Quick add</AppText>
-          <Field label="Name" value={quickName} onChangeText={setQuickName} error={quickErrors.name} keyboard="default" placeholder="Phở bò" />
-          <Field label="Calories" value={quickKcal} onChangeText={setQuickKcal} error={quickErrors.kcal} suffix="kcal" />
-          <Field label="Protein" value={quickP} onChangeText={setQuickP} error={quickErrors.proteinG} labelColor={theme.macroColors.protein} suffix="g" />
-          <Field label="Carbs" value={quickC} onChangeText={setQuickC} error={quickErrors.carbsG} labelColor={theme.macroColors.carbs} suffix="g" />
-          <Field label="Fat" value={quickF} onChangeText={setQuickF} error={quickErrors.fatG} labelColor={theme.macroColors.fat} suffix="g" />
-          <Field label="Fiber (blank if unknown)" value={quickFiber} onChangeText={setQuickFiber} error={quickErrors.fiberG} suffix="g" />
-          <Field label="Portion" value={quickGrams} onChangeText={setQuickGrams} error={quickErrors.grams} suffix="g" />
-          {formError ? <AppText variant="caption" color={theme.colors.warningText}>{formError}</AppText> : null}
+          <AppText variant="section">{t('log.quickAdd')}</AppText>
+          <Field label={t('common.name')} value={quickName} onChangeText={setQuickName} error={text(quickErrors.name)} keyboard="default" placeholder={t('log.quickNamePlaceholder')} />
+          <Field label={t('common.calories')} value={quickKcal} onChangeText={setQuickKcal} error={text(quickErrors.kcal)} suffix="kcal" />
+          <Field label={t('macro.protein')} value={quickP} onChangeText={setQuickP} error={text(quickErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" />
+          <Field label={t('macro.carbs')} value={quickC} onChangeText={setQuickC} error={text(quickErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" />
+          <Field label={t('macro.fat')} value={quickF} onChangeText={setQuickF} error={text(quickErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" />
+          <Field label={t('log.fiberBlank')} value={quickFiber} onChangeText={setQuickFiber} error={text(quickErrors.fiberG)} suffix="g" />
+          <Field label={t('log.portion')} value={quickGrams} onChangeText={setQuickGrams} error={text(quickErrors.grams)} suffix="g" />
+          {formError ? <AppText variant="caption" color={theme.colors.warningText}>{tm(formError)}</AppText> : null}
           {quickWarning ? (
             <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="quick-warning">
-              {quickWarning} Fix the numbers, or save it as entered.
+              {tm(quickWarning)} {t('log.fixOrSave')}
             </AppText>
           ) : null}
           {quickWarning ? (
             <>
-              <PrimaryButton label="Save anyway" onPress={() => saveQuick(true)} testID="quick-save-anyway" />
-              <SecondaryButton label="Edit numbers" onPress={() => setQuickWarning(null)} />
+              <PrimaryButton label={t('log.saveAnyway')} onPress={() => saveQuick(true)} testID="quick-save-anyway" />
+              <SecondaryButton label={t('log.editNumbers')} onPress={() => setQuickWarning(null)} />
             </>
           ) : (
-            <PrimaryButton label="Save quick add" onPress={() => saveQuick(false)} testID="quick-save" />
+            <PrimaryButton label={t('log.saveQuickAdd')} onPress={() => saveQuick(false)} testID="quick-save" />
           )}
         </Card>
       ) : null}
 
       {debounced.trim() ? (
         <View style={{ gap: theme.spacing.sm }}>
-          {results.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>No foods match that search.</AppText> : null}
+          {results.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>{t('log.noMatches')}</AppText> : null}
           {results.map((food) => (
-            <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" accessibilityLabel={`${food.name}, ${formatKcal(food.kcalPer100g)} kcal per 100 grams. Add`} style={{
+            <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" accessibilityLabel={t('log.resultLabel', { name: food.name, kcal: formatKcal(food.kcalPer100g) })} style={{
               backgroundColor: theme.colors.surface,
               borderRadius: theme.radii.card,
               borderWidth: 1,
@@ -384,7 +389,7 @@ export default function LogScreen() {
               <View style={{ flex: 1 }}>
                 <AppText>{food.name}</AppText>
                 <AppText variant="caption" color={theme.colors.textSecondary}>
-                  {formatKcal(food.kcalPer100g)} kcal / 100 g · P {formatAmount(food.proteinPer100g)} · C {formatAmount(food.carbsPer100g)} · F {formatAmount(food.fatPer100g)} · fiber {formatFiber(food.fiberPer100g)}
+                  {t('log.resultDetail', { kcal: formatKcal(food.kcalPer100g), p: formatAmount(food.proteinPer100g), c: formatAmount(food.carbsPer100g), f: formatAmount(food.fatPer100g), fiber: formatFiber(food.fiberPer100g) })}
                 </AppText>
               </View>
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' }}>
@@ -393,26 +398,26 @@ export default function LogScreen() {
             </Pressable>
           ))}
           {allResults.length > results.length ? (
-            <SecondaryButton label={`Show more (${allResults.length - results.length} more)`} onPress={() => setShown((value) => value + SEARCH_PAGE_SIZE)} />
+            <SecondaryButton label={t('log.showMore', { count: allResults.length - results.length })} onPress={() => setShown((value) => value + SEARCH_PAGE_SIZE)} />
           ) : null}
         </View>
       ) : (
         <AppText variant="secondary" color={theme.colors.textSecondary}>
-          Search {foods.length} foods. USDA names work in any order, so “baked bacon” finds “Bacon, baked”.
+          {t('log.searchHint', { count: foods.length })}
         </AppText>
       )}
 
-      <AppText variant="section">{MEAL_LABEL[meal]} · {friendlyDate(date)}</AppText>
-      {dayEntries.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>Nothing in this meal yet.</AppText> : null}
+      <AppText variant="section">{t(MEAL_KEY[meal])} · {friendlyDate(date)}</AppText>
+      {dayEntries.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>{t('log.mealEmpty')}</AppText> : null}
       {dayEntries.map((entry) => (
         <Card key={entry.id}>
           <AppText>{entry.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
-            {formatAmount(entry.grams)} g · {formatKcal(entry.kcal)} kcal · fiber {formatFiber(entry.fiberG)}
+            {t('log.entryDetail', { grams: formatAmount(entry.grams), kcal: formatKcal(entry.kcal), fiber: formatFiber(entry.fiberG) })}
           </AppText>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
-            <SecondaryButton label="Edit" onPress={() => openEdit(entry)} />
-            <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${entry.name}`} onPress={() => remove(entry)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
+            <SecondaryButton label={t('common.edit')} onPress={() => openEdit(entry)} />
+            <Pressable accessibilityRole="button" accessibilityLabel={t('log.deleteLabel', { name: entry.name })} onPress={() => remove(entry)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
               <Trash2 color={theme.colors.warningText} size={20} />
             </Pressable>
           </View>
@@ -420,8 +425,8 @@ export default function LogScreen() {
       ))}
       {undo ? (
         <Card>
-          <AppText>Removed {undo.entry.name}.</AppText>
-          <SecondaryButton label="Undo" onPress={async () => { await restoreLog(undo.entry, undo.index); setUndo(null); }} />
+          <AppText>{t('log.removed', { name: undo.entry.name })}</AppText>
+          <SecondaryButton label={t('common.undo')} onPress={async () => { await restoreLog(undo.entry, undo.index); setUndo(null); }} />
         </Card>
       ) : null}
     </Screen>

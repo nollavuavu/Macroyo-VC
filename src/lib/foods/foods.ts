@@ -4,6 +4,9 @@
  * Unknown fiber stays null. A numeric 0 stays 0.
  */
 
+import { formatNumberFor } from '../../i18n/numbers';
+import { getLocale } from '../../i18n/state';
+import type { Locale } from '../../i18n/types';
 import rawFoods from '../../../assets/foods.json';
 
 export interface Food {
@@ -179,9 +182,9 @@ export function searchFoods(foods: readonly Food[], query: string, limit = SEARC
   return hits.slice(0, limit).map((hit) => hit.food);
 }
 
-export function formatFiber(fiber: number | null | undefined): string {
+export function formatFiber(fiber: number | null | undefined, locale: Locale = getLocale()): string {
   if (fiber == null) return '—';
   const rounded = Math.round(fiber * 10) / 10;
   if (Object.is(rounded, -0) || rounded === 0) return '0';
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return formatNumberFor(locale, rounded, { minFraction: Number.isInteger(rounded) ? 0 : 1, maxFraction: 1, grouping: false });
 }

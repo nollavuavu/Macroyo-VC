@@ -4,6 +4,10 @@
  * With no sign the caller's deficit/surplus toggle decides. Anything malformed is invalid and
  * never becomes a surplus: the offset is 0.
  */
+import { msg } from '../../i18n/msg';
+import type { Msg } from '../../i18n/types';
+import { isAmbiguousThousands } from './nutrition';
+
 export type OffsetDirection = 'deficit' | 'surplus';
 
 export interface ParsedOffset {
@@ -17,7 +21,7 @@ export interface ParsedOffset {
   direction: OffsetDirection;
   empty: boolean;
   valid: boolean;
-  message: string | null;
+  message: Msg | null;
 }
 
 const MINUS_SIGNS = /^[-\u2212\u2012\u2013\u2014]/;
@@ -46,12 +50,16 @@ export function parseCustomOffset(raw: string, fallback: OffsetDirection = 'surp
       direction,
       empty: false,
       valid: false,
-      message: 'Enter a number of kcal, like 300 or -300.',
+      message: msg('offset.invalid'),
     };
+  }
+  // Same safety rule as parseDecimal: "1,234" (and "1.234" in Vietnamese) is never guessed.
+  if (isAmbiguousThousands(body)) {
+    return { offset: 0, magnitude: 0, signedDirection, direction, empty: false, valid: false, message: msg('validate.noThousands') };
   }
   const magnitude = Number(body.replace(',', '.'));
   if (!Number.isFinite(magnitude)) {
-    return { offset: 0, magnitude: 0, signedDirection, direction, empty: false, valid: false, message: 'Enter a number of kcal, like 300 or -300.' };
+    return { offset: 0, magnitude: 0, signedDirection, direction, empty: false, valid: false, message: msg('offset.invalid') };
   }
   return {
     offset: direction === 'deficit' ? -magnitude : magnitude,

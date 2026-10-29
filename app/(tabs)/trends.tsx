@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
-import { addDays, friendlyDate, localDateISO, shortDate, weekdayShort } from '@/src/lib/dates';
-import { formatAmount, formatKcal } from '@/src/lib/format';
+import { addDays, friendlyDate, localDateISO, shortDate, weekdayNarrow } from '@/src/lib/dates';
+import { formatAmount, formatFixed, formatKcal } from '@/src/lib/format';
+import { useI18n } from '@/src/i18n/react';
 import { mean, trailingAverage } from '@/src/lib/stats';
 import { borderStrong } from '@/src/theme/extras';
 import { useApp, useTheme } from '@/src/state/AppContext';
@@ -12,6 +13,7 @@ type Range = '7' | '30' | '90' | 'all';
 
 export default function TrendsScreen() {
   const theme = useTheme();
+  const { t } = useI18n();
   const { data } = useApp();
   const [range, setRange] = useState<Range>('7');
   const today = localDateISO();
@@ -35,22 +37,22 @@ export default function TrendsScreen() {
 
   return (
     <Screen testID="screen-trends">
-      <AppText variant="title">Trends</AppText>
+      <AppText variant="title">{t('trends.title')}</AppText>
       <Segmented
         value={range}
         onChange={setRange}
         options={[
-          { value: '7', label: '7D' },
-          { value: '30', label: '30D' },
-          { value: '90', label: '90D' },
-          { value: 'all', label: 'All' },
+          { value: '7', label: t('trends.range.7') },
+          { value: '30', label: t('trends.range.30') },
+          { value: '90', label: t('trends.range.90') },
+          { value: 'all', label: t('trends.range.all') },
         ]}
       />
       <Card style={{ gap: theme.spacing.sm }}>
-        <AppText variant="section">Weight</AppText>
+        <AppText variant="section">{t('trends.weight')}</AppText>
         {stats.length === 0 ? (
           <AppText variant="secondary" color={theme.colors.textSecondary}>
-            No weigh-ins yet. Save one from Calc (Body → Save to progress) and your trend line starts here. One entry is enough.
+            {t('trends.weightEmpty')}
           </AppText>
         ) : (
           <>
@@ -63,18 +65,26 @@ export default function TrendsScreen() {
               text={theme.colors.textSecondary}
             />
             <AppText variant="caption" color={theme.colors.textSecondary}>
-              {stats.length > 1 ? 'Dots are weigh-ins; the thin line is a 7-entry trailing average. ' : ''}
-              Latest {formatAmount(stats[stats.length - 1].weightKg)} kg · {friendlyDate(stats[stats.length - 1].date, today)}
-              {stats.length > 1 ? ` · change ${formatAmount(stats[stats.length - 1].weightKg - stats[0].weightKg)} kg in this range` : ''}
+              {stats.length > 1 ? `${t('trends.weightLegend')} ` : ''}
+              {stats.length > 1
+                ? t('trends.weightLatestChange', {
+                    weight: formatAmount(stats[stats.length - 1].weightKg),
+                    date: friendlyDate(stats[stats.length - 1].date, today),
+                    change: formatAmount(stats[stats.length - 1].weightKg - stats[0].weightKg),
+                  })
+                : t('trends.weightLatest', {
+                    weight: formatAmount(stats[stats.length - 1].weightKg),
+                    date: friendlyDate(stats[stats.length - 1].date, today),
+                  })}
             </AppText>
           </>
         )}
       </Card>
       <Card style={{ gap: theme.spacing.sm }}>
-        <AppText variant="section">Calories</AppText>
+        <AppText variant="section">{t('trends.calories')}</AppText>
         {calories.every((day) => day.kcal === 0) ? (
           <AppText variant="secondary" color={theme.colors.textSecondary}>
-            No meals logged in this range. Log a few and each day shows up as a bar against your target.
+            {t('trends.caloriesEmpty')}
           </AppText>
         ) : (
           <CalorieBars
@@ -91,18 +101,30 @@ export default function TrendsScreen() {
           />
         )}
         <AppText variant="caption" color={theme.colors.textSecondary}>
-          {range === '7' ? 'Last 7 days' : range === '30' ? 'Last 30 days, chart shows up to 30' : 'Recent days'} · target {formatKcal(target)} kcal (solid line){averageLogged(calories.map((day) => day.kcal)) != null ? ` · average ${formatKcal(averageLogged(calories.map((day) => day.kcal)) ?? 0)} kcal on logged days (dashed)` : ''}. Bars turn amber when a day is over target.
+          {t('trends.caloriesCaption', {
+            range: t(range === '7' ? 'trends.last7' : range === '30' ? 'trends.last30' : 'trends.recent'),
+            target: formatKcal(target),
+            average: averageLogged(calories.map((day) => day.kcal)) != null
+              ? t('trends.caloriesAverage', { avg: formatKcal(averageLogged(calories.map((day) => day.kcal)) ?? 0) })
+              : '',
+          })}
         </AppText>
       </Card>
       <Card style={{ gap: theme.spacing.xs }}>
-        <AppText variant="section">Latest body numbers</AppText>
+        <AppText variant="section">{t('trends.bodyNumbers')}</AppText>
         {stats.length === 0 ? (
-          <AppText variant="secondary" color={theme.colors.textSecondary}>BMI and FFMI show up after you save from Calc.</AppText>
+          <AppText variant="secondary" color={theme.colors.textSecondary}>{t('trends.bodyEmpty')}</AppText>
         ) : (
           <AppText variant="secondary" color={theme.colors.textSecondary}>
-            BMI {stats[stats.length - 1].bmi.toFixed(1)}
-            {stats[stats.length - 1].ffmi != null ? ` · FFMI ${(stats[stats.length - 1].ffmi ?? 0).toFixed(1)}` : ' · FFMI needs a body-fat entry'}
-            {stats[stats.length - 1].normalizedFfmi != null ? ` · normalized ${(stats[stats.length - 1].normalizedFfmi ?? 0).toFixed(1)}` : ''}
+            {[
+              t('trends.bmiValue', { value: formatFixed(stats[stats.length - 1].bmi, 1) }),
+              stats[stats.length - 1].ffmi != null
+                ? t('trends.ffmiValue', { value: formatFixed(stats[stats.length - 1].ffmi ?? 0, 1) })
+                : t('trends.ffmiNeeds'),
+              stats[stats.length - 1].normalizedFfmi != null
+                ? t('trends.normalizedValue', { value: formatFixed(stats[stats.length - 1].normalizedFfmi ?? 0, 1) })
+                : null,
+            ].filter(Boolean).join(' · ')}
           </AppText>
         )}
       </Card>
@@ -136,6 +158,7 @@ function WeightChart({
   axis: string;
   text: string;
 }) {
+  const { t } = useI18n();
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
@@ -153,7 +176,7 @@ function WeightChart({
       height={CHART_H}
       viewBox={`0 0 ${CHART_W} ${CHART_H}`}
       accessible
-      accessibilityLabel={`Weight chart, ${values.length} weigh-ins from ${formatAmount(first)} to ${formatAmount(last)} kilograms`}
+      accessibilityLabel={t('trends.weightChartLabel', { count: values.length, from: formatAmount(first), to: formatAmount(last) })}
     >
       <Line x1={PAD_L} y1={PAD_T} x2={CHART_W - PAD_R} y2={PAD_T} stroke={grid} strokeWidth="1" />
       <Line x1={PAD_L} y1={PAD_T + plotH} x2={CHART_W - PAD_R} y2={PAD_T + plotH} stroke={axis} strokeWidth="1" />
@@ -195,6 +218,7 @@ function CalorieBars({
   text: string;
   line: string;
 }) {
+  const { t } = useI18n();
   const gap = 4;
   const plotW = CHART_W - PAD_L - PAD_R;
   const plotH = CHART_H - PAD_T - PAD_B;
@@ -208,7 +232,9 @@ function CalorieBars({
       height={CHART_H}
       viewBox={`0 0 ${CHART_W} ${CHART_H}`}
       accessible
-      accessibilityLabel={`Calories per day for ${values.length} days${target > 0 ? `, target ${formatKcal(target)}` : ''}`}
+      accessibilityLabel={target > 0
+        ? t('trends.caloriesChartLabelTarget', { count: values.length, target: formatKcal(target) })
+        : t('trends.caloriesChartLabel', { count: values.length })}
     >
       <Line x1={PAD_L} y1={PAD_T + plotH} x2={CHART_W - PAD_R} y2={PAD_T + plotH} stroke={axis} strokeWidth="1" />
       <SvgText x={PAD_L - 6} y={PAD_T + plotH + 4} fontSize="11" fill={text} textAnchor="end">0</SvgText>
@@ -216,7 +242,7 @@ function CalorieBars({
       {values.map((value, index) => {
         const x = PAD_L + index * (barWidth + gap);
         const barHeight = Math.max(0, (value / max) * plotH);
-        const label = index % labelEvery === 0 ? (values.length <= 7 ? weekdayShort(dates[index]).slice(0, 1) : shortDate(dates[index])) : null;
+        const label = index % labelEvery === 0 ? (values.length <= 7 ? weekdayNarrow(dates[index]) : shortDate(dates[index])) : null;
         return (
           <G key={index}>
             <Rect x={x} y={PAD_T + plotH - barHeight} width={barWidth} height={barHeight} rx="3" fill={target > 0 && value > target ? over : fill} />
