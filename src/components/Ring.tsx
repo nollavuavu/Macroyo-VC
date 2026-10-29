@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { AppText } from './ui';
 import { useTheme } from '../state/AppContext';
 import { formatKcal } from '../lib/format';
+import { remainingDisplay } from '../lib/domain';
 
 export function CalorieRing({ consumed, target }: { consumed: number; target: number }) {
   const theme = useTheme();
@@ -10,16 +11,17 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
   const stroke = 16;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const ratio = target > 0 ? consumed / target : 0;
-  const over = target > 0 && consumed > target;
+  // Everything below comes from the same whole numbers, so the ring, total and remaining always agree.
+  const shown = remainingDisplay(consumed, target);
+  const ratio = shown.target > 0 ? shown.consumed / shown.target : 0;
+  const over = shown.target > 0 && shown.kind === 'over';
   const color = over ? theme.colors.warning : theme.colors.primary;
   const dash = target > 0 ? Math.min(1, Math.max(0, ratio)) * circumference : 0;
-  const remaining = target - consumed;
   return (
     <View
       style={{ alignItems: 'center', gap: theme.spacing.sm }}
       accessible
-      accessibilityLabel={target > 0 ? `${formatKcal(consumed)} of ${formatKcal(target)} kilocalories` : `${formatKcal(consumed)} kilocalories, no target set`}
+      accessibilityLabel={target > 0 ? `${formatKcal(shown.consumed)} of ${formatKcal(shown.target)} kilocalories` : `${formatKcal(shown.consumed)} kilocalories, no target set`}
     >
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ transform: [{ rotate: '-90deg' }] }}>
@@ -40,12 +42,12 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
           </Svg>
         </View>
         <View style={{ position: 'absolute', alignItems: 'center' }}>
-          <AppText variant="heroNumber">{formatKcal(consumed)}</AppText>
-          <AppText variant="secondary" color={theme.colors.textSecondary}>/ {formatKcal(target)} kcal</AppText>
+          <AppText variant="heroNumber">{formatKcal(shown.consumed)}</AppText>
+          <AppText variant="secondary" color={theme.colors.textSecondary}>/ {formatKcal(shown.target)} kcal</AppText>
         </View>
       </View>
       <AppText variant="bodyMedium" color={over ? theme.colors.warningText : theme.colors.textSecondary}>
-        {target <= 0 ? 'Set a calorie target in Profile' : over ? `${formatKcal(consumed - target)} over` : `${formatKcal(Math.max(0, remaining))} left`}
+        {target <= 0 ? 'Set a calorie target in Profile' : over ? `${formatKcal(shown.amount)} over` : `${formatKcal(shown.amount)} left`}
       </AppText>
     </View>
   );

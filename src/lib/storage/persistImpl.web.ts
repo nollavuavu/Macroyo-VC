@@ -17,3 +17,10 @@ export async function loadState(): Promise<AppData> {
 export async function saveState(data: AppData): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(data));
 }
+
+/** Keep a copy of the raw stored blob under a timestamped key before anything can overwrite it. */
+export async function backupRawState(): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEY);
+  if (raw == null) return;
+  await AsyncStorage.setItem(`${KEY}.backup.${Date.now()}`, raw);
+}

@@ -2,21 +2,41 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useColorScheme as useSystemSchemeRN } from 'react-native';
 import { Platform } from 'react-native';
 import { getTheme, type Theme } from '../theme/theme';
-import { loadState, saveState, EMPTY_DATA, type AppData, type BodyStat, type LogEntry, type Profile } from '../lib/storage/repository';
+import { localDateISO } from '../lib/dates';
+import {
+  EMPTY_DATA,
+  READ_FAILED_MESSAGE,
+  backupRawState,
+  insertAt,
+  loadState,
+  openStore,
+  saveState,
+  type AppData,
+  type BodyStat,
+  type LogEntry,
+  type Profile,
+  type StateStore,
+} from '../lib/storage/repository';
 
 interface AppContextValue {
   ready: boolean;
   error: string | null;
+  /** True when stored data could not be read: writes are blocked until resetAll. */
+  readFailed: boolean;
   data: AppData;
-  saveProfile: (profile: Profile) => Promise<void>;
-  updateProfile: (profile: Profile) => Promise<void>;
-  addLog: (entry: LogEntry) => Promise<void>;
-  updateLog: (entry: LogEntry) => Promise<void>;
-  deleteLog: (id: string) => Promise<LogEntry | null>;
-  restoreLog: (entry: LogEntry) => Promise<void>;
-  addBodyStat: (stat: BodyStat) => Promise<void>;
-  deleteBodyStat: (id: string) => Promise<void>;
-  resetAll: () => Promise<void>;
+  /** Date shown on Today, shared with the Log tab. */
+  selectedDate: string;
+  setSelectedDate: (iso: string) => void;
+  saveProfile: (profile: Profile) => Promise<boolean>;
+  updateProfile: (profile: Profile) => Promise<boolean>;
+  addLog: (entry: LogEntry) => Promise<boolean>;
+  updateLog: (entry: LogEntry) => Promise<boolean>;
+  /** Returns the removed entry and the position it had, or null if nothing was deleted. */
+  deleteLog: (id: string) => Promise<{ entry: LogEntry; index: number } | null>;
+  restoreLog: (entry: LogEntry, index?: number) => Promise<boolean>;
+  addBodyStat: (stat: BodyStat) => Promise<boolean>;
+  deleteBodyStat: (id: string) => Promise<boolean>;
+  resetAll: () => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -25,64 +45,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dataRef = useRef(data);
-  dataRef.current = data;
+  const [readFailed, setReadFailed] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => localDateISO());
+  const storeRef = useRef<StateStore | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadState()
-      .then((loaded) => {
-        if (cancelled) return;
-        setData(loaded);
-        setReady(true);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError('Saved data could not be read. You can keep going, but it may not stick.');
-        setReady(true);
-      });
+    openStore({ load: loadState, save: saveState, backupRaw: backupRawState }).then((store) => {
+      if (cancelled) return;
+      storeRef.current = store;
+      setData(store.get());
+      if (store.loadError()) {
+        setReadFailed(true);
+        setError(READ_FAILED_MESSAGE);
+      }
+      setReady(true);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const commit = useCallback(async (next: AppData) => {
-    dataRef.current = next;
-    setData(next);
-    try {
-      await saveState(next);
+  // Save first, then show. On failure nothing changes and the user sees why.
+  const commit = useCallback(async (update: (current: AppData) => AppData): Promise<boolean> => {
+    const store = storeRef.current;
+    if (!store) return false;
+    const result = await store.commit(update);
+    if (result.ok) {
+      setData(result.data);
       setError(null);
-    } catch {
-      setError('Could not save on this device.');
+      return true;
     }
+    setError(result.error);
+    return false;
   }, []);
 
   const value = useMemo<AppContextValue>(() => ({
     ready,
     error,
+    readFailed,
     data,
-    saveProfile: (profile) => commit({ ...dataRef.current, profile }),
-    updateProfile: (profile) => commit({ ...dataRef.current, profile }),
-    addLog: (entry) => commit({ ...dataRef.current, logs: [entry, ...dataRef.current.logs] }),
+    selectedDate,
+    setSelectedDate,
+    saveProfile: (profile) => commit((cur) => ({ ...cur, profile })),
+    updateProfile: (profile) => commit((cur) => ({ ...cur, profile })),
+    addLog: (entry) => commit((cur) => ({ ...cur, logs: [entry, ...cur.logs] })),
     updateLog: (entry) =>
-      commit({
-        ...dataRef.current,
-        logs: dataRef.current.logs.map((item) => (item.id === entry.id ? entry : item)),
-      }),
+      commit((cur) => ({ ...cur, logs: cur.logs.map((item) => (item.id === entry.id ? entry : item)) })),
     deleteLog: async (id) => {
-      const existing = dataRef.current.logs.find((item) => item.id === id) ?? null;
-      await commit({ ...dataRef.current, logs: dataRef.current.logs.filter((item) => item.id !== id) });
-      return existing;
+      let removed: { entry: LogEntry; index: number } | null = null;
+      const ok = await commit((cur) => {
+        const index = cur.logs.findIndex((item) => item.id === id);
+        removed = index < 0 ? null : { entry: cur.logs[index], index };
+        return index < 0 ? cur : { ...cur, logs: cur.logs.filter((item) => item.id !== id) };
+      });
+      return ok ? removed : null;
     },
-    restoreLog: (entry) => {
-      if (dataRef.current.logs.some((item) => item.id === entry.id)) return Promise.resolve();
-      return commit({ ...dataRef.current, logs: [entry, ...dataRef.current.logs] });
+    restoreLog: (entry, index = 0) =>
+      commit((cur) =>
+        cur.logs.some((item) => item.id === entry.id) ? cur : { ...cur, logs: insertAt(cur.logs, entry, index) },
+      ),
+    addBodyStat: (stat) => commit((cur) => ({ ...cur, bodyStats: [stat, ...cur.bodyStats] })),
+    deleteBodyStat: (id) => commit((cur) => ({ ...cur, bodyStats: cur.bodyStats.filter((item) => item.id !== id) })),
+    resetAll: async () => {
+      const store = storeRef.current;
+      if (!store) return false;
+      const result = await store.reset();
+      if (result.ok) {
+        setData(result.data);
+        setReadFailed(false);
+        setError(null);
+        return true;
+      }
+      setError(result.error);
+      return false;
     },
-    addBodyStat: (stat) => commit({ ...dataRef.current, bodyStats: [stat, ...dataRef.current.bodyStats] }),
-    deleteBodyStat: (id) =>
-      commit({ ...dataRef.current, bodyStats: dataRef.current.bodyStats.filter((item) => item.id !== id) }),
-    resetAll: () => commit({ ...EMPTY_DATA, logs: [], bodyStats: [] }),
-  }), [commit, data, error, ready]);
+  }), [commit, data, error, ready, readFailed, selectedDate]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -1,4 +1,5 @@
 import { roundHalfUp, roundHalfUp1 } from './domain/projection';
+import { normalizeFeetInches } from './domain/nutrition';
 
 export function formatAmount(value: number, digits = 1): string {
   if (!Number.isFinite(value)) return '—';
@@ -37,9 +38,7 @@ export function formatWeightKg(kg: number, units: 'metric' | 'imperial'): string
 
 export function formatHeightCm(cm: number, units: 'metric' | 'imperial'): string {
   if (units === 'imperial') {
-    const total = cm / 2.54;
-    const feet = Math.floor(total / 12);
-    const inches = roundHalfUp1(total - feet * 12);
+    const { feet, inches } = normalizeFeetInches(0, cm / 2.54);
     return `${feet} ft ${formatAmount(inches, 1)} in`;
   }
   return `${formatAmount(cm, 1)} cm`;

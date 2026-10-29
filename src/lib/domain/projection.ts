@@ -100,6 +100,9 @@ export interface ProjectionResult {
 }
 
 /** Shortest round-trip decimal, then half-up (away from zero) to 0.1. Matches Python Decimal(repr(float)). */
+export const DEFICIT_UNAVAILABLE_MESSAGE =
+  "Your maintenance calories are already close to the minimum safe intake, so a calorie deficit isn't recommended. Consider more activity, or talk to a professional.";
+
 export function roundHalfUp1(x: number): number {
   if (!Number.isFinite(x)) return x;
   const negative = x < 0;
@@ -349,7 +352,7 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
       effective = 0;
       warnings.push({
         code: 'DEFICIT_UNAVAILABLE',
-        message: `Safe deficit is only ${formatFixed(cap, 1)} kcal/day (< ${formatG(DEFICIT_MIN_KCAL)}); a weight-loss target is not available for this profile, so the projection shows maintenance (0 kcal/day offset).`,
+        message: DEFICIT_UNAVAILABLE_MESSAGE,
       });
     } else if (-input.daily_offset_kcal > cap + 1e-12) {
       effective = -cap;
@@ -406,7 +409,7 @@ export function projectV1(input: ProjectionInput): ProjectionResult {
     warnings.push({
       code: 'BMI_FLOOR_REACHED',
       horizons: clamped.map((row) => row.label),
-      message: `Projection stopped at the BMI-18.5 weight (${formatFixed(wmin, 1)} kg) from ${clamped[0].label} onward.`,
+      message: `Projection stopped at a healthy minimum BMI (${formatFixed(wmin, 1)} kg) from ${clamped[0].label} onward.`,
     });
   }
 

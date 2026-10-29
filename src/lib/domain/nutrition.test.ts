@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFICIT_UNAVAILABLE_MESSAGE } from './projection';
 import {
   ACTIVITY_FACTORS,
   assessTargets,
@@ -121,7 +122,7 @@ describe('O-2 / O-2c / O-3 / O-5 energy and macros', () => {
     expect(plan.goalAllowed).toBe(false);
     expect(plan.goal).toBe('maintain');
     expect(plan.kcal).toBe(1506);
-    expect(plan.goalBlockReason).toMatch(/not available/i);
+    expect(plan.goalBlockReason).toBe(DEFICIT_UNAVAILABLE_MESSAGE);
   });
 
   it('O-5d BMI under 18.5 does not offer a cut', () => {
@@ -318,7 +319,7 @@ describe('food math, fiber, and quick add', () => {
   });
 
   it('L-7 mismatched quick-add macros warn and still have no blocking issue', () => {
-    const result = validateQuickAdd({ name: 'Guess', kcal: 100, proteinG: 40, carbsG: 40, fatG: 40, fiberG: null, grams: 100 });
+    const result = validateQuickAdd({ name: 'Guess', kcal: 100, proteinG: 40, carbsG: 40, fatG: 40, fiberG: null, grams: 400 });
     expect(result.issues).toEqual([]);
     expect(result.mismatch).toBeTruthy();
   });

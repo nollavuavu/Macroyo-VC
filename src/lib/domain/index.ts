@@ -1,3 +1,5 @@
+export { scaleHalfUp1, roundToSum, remainingDisplay, type RemainingDisplay } from './portion';
+export { DEFICIT_UNAVAILABLE_MESSAGE } from './projection';
 export {
   ACTIVITY_DETAILS,
   ACTIVITY_FACTORS,
@@ -11,6 +13,17 @@ export {
   assessTargets,
   bmiCategory,
   bmiTone,
+  isAmbiguousThousands,
+  normalizeFeetInches,
+  valueUnlessUnchanged,
+  validateTypedMeasure,
+  quickAddDecision,
+  quickAddMismatch,
+  targetNotices,
+  macroMismatchTolerance,
+  LOW_CARB_WARNING_G,
+  LOW_CARB_NOTE_G,
+  MAX_ENTRY_MACRO_G,
   quickAddFieldErrors,
   bmiImperial,
   bmiMetric,
@@ -59,6 +72,8 @@ export type {
   BmiTone,
   BmrFormula,
   QuickAddField,
+  QuickAddDecision,
+  TypedMeasureKind,
   FieldCheck,
   FoodMacros,
   Goal,

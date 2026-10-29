@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { nextBanner } from '@/src/lib/banner';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -13,6 +14,9 @@ import {
   validateBodyFat,
   validateHeightCm,
   validateWeightKg,
+  normalizeFeetInches,
+  targetNotices,
+  valueUnlessUnchanged,
   type ActivityLevel,
   type BmrFormula,
   type Goal,
@@ -27,10 +31,11 @@ import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Scre
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { data, error, updateProfile, resetAll } = useApp();
+  const { data, updateProfile, resetAll } = useApp();
   const profile = data.profile;
   const [confirmReset, setConfirmReset] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const clearNotice = useCallback((_?: string | null) => setNotice((current) => nextBanner(current, { type: 'edit' })), []);
   if (!profile) {
     return (
       <Screen testID="screen-profile">
@@ -43,12 +48,11 @@ export default function ProfileScreen() {
   return (
     <Screen testID="screen-profile">
       <AppText variant="title">Profile</AppText>
-      {error ? <AppText variant="caption" color={theme.colors.warningText}>{error}</AppText> : null}
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="section">Appearance</AppText>
         <Segmented
           value={profile.appearance}
-          onChange={(appearance) => save({ ...profile, appearance })}
+          onChange={(appearance) => { void save({ ...profile, appearance }); }}
           options={[
             { value: 'system' as Appearance, label: 'System' },
             { value: 'light' as Appearance, label: 'Light' },
@@ -58,7 +62,7 @@ export default function ProfileScreen() {
         <AppText variant="section">Units</AppText>
         <Segmented
           value={profile.units}
-          onChange={(units) => save({ ...profile, units })}
+          onChange={(units) => { void save({ ...profile, units }); }}
           options={[
             { value: 'metric' as UnitSystem, label: 'Metric' },
             { value: 'imperial' as UnitSystem, label: 'Imperial' },
@@ -72,13 +76,13 @@ export default function ProfileScreen() {
         key={`${profile.units}-${profile.heightCm}-${profile.weightKg}-${profile.age}-${profile.sex}-${profile.goal}`}
         profile={profile}
         onSave={save}
-        onNotice={setNotice}
+        onNotice={clearNotice}
       />
       <TargetEditor
         key={`${profile.targets.kcal}-${profile.targets.proteinG}-${profile.targets.carbsG}-${profile.targets.fatG}`}
         profile={profile}
         onSave={save}
-        onNotice={setNotice}
+        onNotice={clearNotice}
       />
       {notice ? <AppText variant="caption" color={theme.colors.successText}>{notice}</AppText> : null}
       <Card style={{ gap: theme.spacing.sm }}>
@@ -101,9 +105,11 @@ export default function ProfileScreen() {
     </Screen>
   );
 
-  async function save(next: Profile) {
-    await updateProfile(next);
-    setNotice('Saved.');
+  async function save(next: Profile, message = 'Saved.'): Promise<boolean> {
+    setNotice((current) => nextBanner(current, { type: 'save-attempt' })); // a new attempt clears the previous banner
+    const ok = await updateProfile(next);
+    if (ok) setNotice((current) => nextBanner(current, { type: 'saved', message }));
+    return ok;
   }
 }
 
@@ -113,15 +119,17 @@ function BodyEditor({
   onNotice,
 }: {
   profile: Profile;
-  onSave: (profile: Profile) => Promise<void>;
-  onNotice: (message: string) => void;
+  onSave: (profile: Profile, message?: string) => Promise<boolean>;
+  /** Called with null when the user edits a field, so a stale 'saved' banner goes away. */
+  onNotice: (message: string | null) => void;
 }) {
   const theme = useTheme();
   const [sex, setSex] = useState(profile.sex);
   const [ageText, setAgeText] = useState(String(profile.age));
-  const [heightText, setHeightText] = useState(initialHeight(profile));
-  const [inchText, setInchText] = useState(initialInches(profile));
-  const [weightText, setWeightText] = useState(initialWeight(profile));
+  const initialTexts = useRef({ height: initialHeight(profile), inches: initialInches(profile), weight: initialWeight(profile) }).current;
+  const [heightText, setHeightText] = useState(initialTexts.height);
+  const [inchText, setInchText] = useState(initialTexts.inches);
+  const [weightText, setWeightText] = useState(initialTexts.weight);
   const [fatText, setFatText] = useState(profile.bodyFatPct == null ? '' : String(profile.bodyFatPct));
   const [activity, setActivity] = useState(profile.activity);
   const [goal, setGoal] = useState(profile.goal);
@@ -130,11 +138,28 @@ function BodyEditor({
   const [sexConstant, setSexConstant] = useState<SexConstantChoice | null>(profile.sexConstant ?? null);
   const [error, setError] = useState<string | null>(null);
 
+  // Imperial text is a rounded display of the stored metric value. If the user did not change the text,
+  // keep the stored value so saving never drifts it (180 cm -> 180.086 cm).
+  function resolveHeight(): number | null {
+    const parsed = profile.units === 'metric' ? parseDecimal(heightText) : heightFromImperial(heightText, inchText);
+    return valueUnlessUnchanged(`${heightText}|${inchText}`, `${initialTexts.height}|${initialTexts.inches}`, profile.heightCm, parsed);
+  }
+  function resolveWeight(): number | null {
+    return valueUnlessUnchanged(weightText, initialTexts.weight, profile.weightKg, profile.units === 'metric' ? parseDecimal(weightText) : weightFromLb(weightText));
+  }
+
+  // Editing anything clears a stale 'saved' banner (skip the mount render).
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (mounted.current) onNotice(null);
+    mounted.current = true;
+  }, [sex, ageText, heightText, inchText, weightText, fatText, activity, goal, pregnant, formulaOverride, sexConstant, onNotice]);
+
   // Live preview so the active formula, its BMR and the unspecified-sex note are always visible.
   const previewPlan = (() => {
     const age = parseDecimal(ageText);
-    const heightCm = profile.units === 'metric' ? parseDecimal(heightText) : heightFromImperial(heightText, inchText);
-    const weightKg = profile.units === 'metric' ? parseDecimal(weightText) : weightFromLb(weightText);
+    const heightCm = resolveHeight();
+    const weightKg = resolveWeight();
     const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
     if (age == null || heightCm == null || weightKg == null || !validateAge(age).ok || !validateHeightCm(heightCm).ok || !validateWeightKg(weightKg).ok || !validateBodyFat(bodyFat).ok) return null;
     return { bodyFat, plan: buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: formulaOverride ?? undefined, sexConstant }) };
@@ -142,8 +167,8 @@ function BodyEditor({
 
   async function saveBody(recalculate: boolean) {
     const age = parseDecimal(ageText);
-    const heightCm = profile.units === 'metric' ? parseDecimal(heightText) : heightFromImperial(heightText, inchText);
-    const weightKg = profile.units === 'metric' ? parseDecimal(weightText) : weightFromLb(weightText);
+    const heightCm = resolveHeight();
+    const weightKg = resolveWeight();
     const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
     const checks = [validateAge(age), validateHeightCm(heightCm), validateWeightKg(weightKg), validateBodyFat(bodyFat)];
     const failed = checks.find((check) => !check.ok);
@@ -159,7 +184,8 @@ function BodyEditor({
     const targets = !profile.targets.custom || recalculate
       ? { kcal: plan.kcal, proteinG: plan.proteinG, carbsG: plan.carbsG, fatG: plan.fatG, fiberG: plan.fiberG, custom: false }
       : profile.targets;
-    await onSave({
+    const message = profile.targets.custom && !recalculate ? 'Profile saved. Custom targets were kept.' : 'Profile saved and targets recalculated.';
+    const ok = await onSave({
       ...profile,
       sex,
       age,
@@ -173,8 +199,11 @@ function BodyEditor({
       formulaOverride,
       sexConstant: sex === 'unspecified' ? sexConstant : null,
       targets,
-    });
-    onNotice(profile.targets.custom && !recalculate ? 'Profile saved. Custom targets were kept.' : 'Profile saved and targets recalculated.');
+    }, message);
+    if (!ok) {
+      setError('Could not save. Your profile was not changed.');
+      return;
+    }
     setError(null);
   }
 
@@ -226,8 +255,9 @@ function TargetEditor({
   onNotice,
 }: {
   profile: Profile;
-  onSave: (profile: Profile) => Promise<void>;
-  onNotice: (message: string) => void;
+  onSave: (profile: Profile, message?: string) => Promise<boolean>;
+  /** Called with null when the user edits a field, so a stale 'saved' banner goes away. */
+  onNotice: (message: string | null) => void;
 }) {
   const theme = useTheme();
   const [kcal, setKcal] = useState(String(profile.targets.kcal));
@@ -235,6 +265,12 @@ function TargetEditor({
   const [carbs, setCarbs] = useState(String(profile.targets.carbsG));
   const [fat, setFat] = useState(String(profile.targets.fatG));
   const [issues, setIssues] = useState<string[]>([]);
+  const mountedTargets = useRef(false);
+  useEffect(() => {
+    if (mountedTargets.current) onNotice(null);
+    mountedTargets.current = true;
+    setIssues([]);
+  }, [kcal, protein, carbs, fat, onNotice]);
 
   const plan = buildMacroPlan({
     sex: profile.sex,
@@ -248,6 +284,12 @@ function TargetEditor({
     formula: profile.formulaOverride ?? undefined,
     sexConstant: profile.sexConstant,
   });
+  const liveNotices = targetNotices({
+    kcal: parseDecimal(kcal),
+    proteinG: parseDecimal(protein),
+    carbsG: parseDecimal(carbs),
+    fatG: parseDecimal(fat),
+  });
   const energy = (parseDecimal(protein) ?? 0) * 4 + (parseDecimal(carbs) ?? 0) * 4 + (parseDecimal(fat) ?? 0) * 9;
 
   async function saveTargets() {
@@ -258,13 +300,13 @@ function TargetEditor({
       fatG: parseDecimal(fat),
     };
     const review = assessTargets(draft, profile.sex, plan.bmr, profile.weightKg, plan.tdee, profile.goal);
-    setIssues(review.issues.map((issue) => issue.message));
+    const liveMessages = new Set(liveNotices.map((notice) => notice.message));
+    setIssues(review.issues.map((issue) => issue.message).filter((message) => !liveMessages.has(message)));
     if (review.blocking || draft.kcal == null || draft.proteinG == null || draft.carbsG == null || draft.fatG == null) return;
     await onSave({
       ...profile,
       targets: { kcal: draft.kcal, proteinG: draft.proteinG, carbsG: draft.carbsG, fatG: draft.fatG, fiberG: plan.fiberG, custom: true },
-    });
-    onNotice('Targets saved.');
+    }, 'Targets saved.');
   }
 
   return (
@@ -277,6 +319,9 @@ function TargetEditor({
       <AppText variant="caption" color={theme.colors.textSecondary}>
         These grams add up to {Math.round(energy)} kcal.
       </AppText>
+      {liveNotices.map((notice) => (
+        <AppText key={notice.message} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>{notice.message}</AppText>
+      ))}
       {issues.map((issue) => (
         <AppText key={issue} variant="caption" color={theme.colors.warningText}>{issue}</AppText>
       ))}
@@ -285,15 +330,17 @@ function TargetEditor({
   );
 }
 
+function imperialParts(profile: Profile): { feet: number; inches: number } {
+  return normalizeFeetInches(0, profile.heightCm / 2.54);
+}
+
 function initialHeight(profile: Profile): string {
   if (profile.units === 'metric') return String(profile.heightCm);
-  return String(Math.floor(profile.heightCm / 2.54 / 12));
+  return String(imperialParts(profile).feet);
 }
 
 function initialInches(profile: Profile): string {
-  const total = profile.heightCm / 2.54;
-  const inches = total - Math.floor(total / 12) * 12;
-  return formatAmount(inches);
+  return formatAmount(imperialParts(profile).inches);
 }
 
 function initialWeight(profile: Profile): string {

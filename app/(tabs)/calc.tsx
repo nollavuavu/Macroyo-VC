@@ -19,6 +19,8 @@ import {
   validateBodyFat,
   validateHeightCm,
   validateWeightKg,
+  validateTypedMeasure,
+  DEFICIT_UNAVAILABLE_MESSAGE,
   type ActivityLevel,
   type Sex,
 } from '@/src/lib/domain';
@@ -52,11 +54,17 @@ export default function CalcScreen() {
   const [preset, setPreset] = useState<number | null>(250);
   const [customText, setCustomText] = useState('');
   const [savedNote, setSavedNote] = useState<string | null>(null);
-  const [heightText, setHeightText] = useState('');
-  const [weightText, setWeightText] = useState('');
+  // Typed text per box. null = untouched. Validation reads this raw text, never the clamped state behind it.
+  const [heightText, setHeightText] = useState<string | null>(null);
+  const [weightText, setWeightText] = useState<string | null>(null);
+  const [ageText, setAgeText] = useState<string | null>(null);
+  const typedHeight = heightText == null ? null : validateTypedMeasure('height', heightText, units);
+  const typedWeight = weightText == null ? null : validateTypedMeasure('weight', weightText, units);
+  const typedAge = ageText == null ? null : validateTypedMeasure('age', ageText, units);
+  const typedInvalid = [typedHeight, typedWeight, typedAge].some((typed) => typed != null && !typed.ok);
 
-  const heightError = validateHeightCm(heightCm).message;
-  const weightError = validateWeightKg(weightKg).message;
+  const heightError = typedHeight?.message ?? validateHeightCm(heightCm).message;
+  const weightError = typedWeight?.message ?? validateWeightKg(weightKg).message;
   const fatError = bodyFat == null ? null : validateBodyFat(bodyFat).message;
   const bmi = bmiMetric(weightKg, heightCm);
   const bmiClass = bmi == null ? null : bmiCategory(bmi);
@@ -105,8 +113,8 @@ export default function CalcScreen() {
   const binding = bindingLimit(bmrPreview.max_safe_offset_components, cap);
 
   async function saveStat() {
-    if (bmi == null || heightError || weightError || fatError) return;
-    await addBodyStat({
+    if (typedInvalid || bmi == null || heightError || weightError || fatError) return;
+    const ok = await addBodyStat({
       id: uid(),
       date: localDateISO(),
       weightKg,
@@ -116,7 +124,7 @@ export default function CalcScreen() {
       ffmi,
       normalizedFfmi: nffmi,
     });
-    setSavedNote('Saved to progress. Your profile was left unchanged.');
+    setSavedNote(ok ? 'Saved to progress. Your profile was left unchanged.' : null);
   }
 
   return (
@@ -133,31 +141,27 @@ export default function CalcScreen() {
       />
       <Segmented
         value={units}
-        onChange={setUnits}
+        onChange={(value) => { setUnits(value); setHeightText(null); setWeightText(null); }}
         options={[{ value: 'metric', label: 'Metric' }, { value: 'imperial', label: 'Imperial' }]}
       />
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="secondary" color={theme.colors.textSecondary}>Height</AppText>
         <AppText variant="inputNumber">{units === 'metric' ? `${formatAmount(heightCm)} cm` : `${formatAmount(heightCm / 2.54)} in`}</AppText>
-        <Slider minimumValue={120} maximumValue={230} value={heightCm} onValueChange={setHeightCm} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
-        <Field label="Type a height" value={heightText} onChangeText={(value) => {
+        <Slider minimumValue={120} maximumValue={230} value={heightCm} onValueChange={(value) => { setHeightCm(value); setHeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
+        <Field label="Type a height" value={heightText ?? ''} onChangeText={(value) => {
           setHeightText(value);
-          const parsed = parseDecimal(value);
-          if (parsed == null) return;
-          const cm = units === 'imperial' ? parsed * 2.54 : parsed;
-          if (validateHeightCm(cm).ok) setHeightCm(cm);
+          const typed = validateTypedMeasure('height', value, units);
+          if (typed.ok && typed.value != null) setHeightCm(typed.value);
         }} suffix={units === 'metric' ? 'cm' : 'in'} error={heightError} />
       </Card>
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="secondary" color={theme.colors.textSecondary}>Weight</AppText>
         <AppText variant="inputNumber">{units === 'metric' ? `${formatAmount(weightKg)} kg` : `${formatAmount(weightKg / 0.45359237)} lb`}</AppText>
-        <Slider minimumValue={30} maximumValue={250} value={Math.min(250, Math.max(30, weightKg))} onValueChange={setWeightKg} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
-        <Field label="Type a weight" value={weightText} onChangeText={(value) => {
+        <Slider minimumValue={30} maximumValue={250} value={Math.min(250, Math.max(30, weightKg))} onValueChange={(value) => { setWeightKg(value); setWeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
+        <Field label="Type a weight" value={weightText ?? ''} onChangeText={(value) => {
           setWeightText(value);
-          const parsed = parseDecimal(value);
-          if (parsed == null) return;
-          const kg = units === 'imperial' ? parsed * 0.45359237 : parsed;
-          if (validateWeightKg(kg).ok) setWeightKg(kg);
+          const typed = validateTypedMeasure('weight', value, units);
+          if (typed.ok && typed.value != null) setWeightKg(typed.value);
         }} suffix={units === 'metric' ? 'kg' : 'lb'} error={weightError} />
       </Card>
 
@@ -179,7 +183,13 @@ export default function CalcScreen() {
         </Card>
       ) : null}
 
-      {mode === 'bmi' && bmi != null && bmiClass ? (
+      {typedInvalid ? (
+        <Card>
+          <AppText variant="secondary" color={theme.colors.warningText} accessibilityRole="alert">Fix the highlighted entry to see results. Nothing below is calculated from an invalid number.</AppText>
+        </Card>
+      ) : null}
+
+      {!typedInvalid && mode === 'bmi' && bmi != null && bmiClass ? (
         <Card style={{ gap: theme.spacing.sm }}>
           <AppText variant="metricNumber">{roundHalfUp1(bmi).toFixed(1)}</AppText>
           <AppText variant="section" color={bmiTone(bmi) === 'success' ? theme.colors.successText : theme.colors.warningText}>{bmiClass.label}</AppText>
@@ -188,7 +198,7 @@ export default function CalcScreen() {
         </Card>
       ) : null}
 
-      {mode === 'ffmi' ? (
+      {!typedInvalid && mode === 'ffmi' ? (
         <Card style={{ gap: theme.spacing.sm }}>
           {bodyFat == null || ffmi == null || nffmi == null || !ffmiReading ? (
             <AppText>Enter body fat to see FFMI. Without it the number would not mean anything.</AppText>
@@ -214,9 +224,9 @@ export default function CalcScreen() {
         <View style={{ gap: theme.spacing.md }}>
           <Card style={{ gap: theme.spacing.sm }}>
             <AppText variant="secondary" color={theme.colors.textSecondary}>Maintenance</AppText>
-            <AppText variant="metricNumber">{formatKcal(projection.tdee_kcal)}</AppText>
+            <AppText variant="metricNumber">{typedInvalid ? '—' : formatKcal(projection.tdee_kcal)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>
-              Estimate · BMR {formatKcal(plan.bmr)} kcal
+              Estimate · BMR {typedInvalid ? '—' : formatKcal(plan.bmr)} kcal
             </AppText>
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} />
             <GroupLabel>Sex</GroupLabel>
@@ -226,10 +236,11 @@ export default function CalcScreen() {
               ))}
             </View>
             <SexConstantPicker sex={sex} value={sexConstant} onChange={setSexConstant} />
-            <Field label="Age" value={String(age)} onChangeText={(value) => {
-              const parsed = parseDecimal(value);
-              if (parsed != null && parsed >= 18 && parsed <= 120) setAge(parsed);
-            }} keyboard="number" />
+            <Field label="Age" value={ageText ?? String(age)} onChangeText={(value) => {
+              setAgeText(value);
+              const typed = validateTypedMeasure('age', value, units);
+              if (typed.ok && typed.value != null) setAge(typed.value);
+            }} error={typedAge?.message} suffix="years" keyboard="number" />
             <GroupLabel>Activity level</GroupLabel>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {(Object.keys(ACTIVITY_FACTORS) as ActivityLevel[]).map((level) => (
@@ -243,6 +254,8 @@ export default function CalcScreen() {
               ))}
             </View>
           </Card>
+          {typedInvalid ? null : (
+            <>
           <Segmented
             value={direction}
             onChange={(value) => { setDirection(value); setCustomText(''); }}
@@ -253,7 +266,7 @@ export default function CalcScreen() {
           />
           {projection.deficit_unavailable ? (
             <AppText variant="secondary" color={theme.colors.warningText}>
-              A weight-loss target is not available. The largest safe deficit is {formatAmount(cap)} kcal/day, under 100, limited by {binding}. The projection shows maintenance.
+              {DEFICIT_UNAVAILABLE_MESSAGE}
             </AppText>
           ) : (
             <AppText variant="caption" color={theme.colors.textSecondary}>
@@ -313,9 +326,14 @@ export default function CalcScreen() {
                   <AppText variant="caption" color={theme.colors.textSecondary}>
                     {row.model === 'static' ? 'Fixed 7,700 kcal/kg' : 'Simplified weekly model'} · estimate
                   </AppText>
+                  {row.clamped ? (
+                    <AppText variant="caption" color={theme.colors.warningText} testID={`clamped-${row.horizon_days}`}>
+                      † Stopped at a healthy minimum BMI
+                    </AppText>
+                  ) : null}
                 </View>
                 <AppText variant="macroGrams">
-                  {formatSigned(row.delta_kg_r)} kg / {formatSigned(row.delta_lb_r)} lb
+                  {formatSigned(row.delta_kg_r)} kg / {formatSigned(row.delta_lb_r)} lb{row.clamped ? ' †' : ''}
                 </AppText>
               </View>
             ))}
@@ -323,10 +341,12 @@ export default function CalcScreen() {
               Real weight change slows over time as a lighter body burns less energy. The first week and month hold the gap steady. From 3 months on, maintenance is recomputed each week. Scale weight also moves with water and glycogen.
             </AppText>
           </Card>
+            </>
+          )}
         </View>
       ) : null}
 
-      {mode !== 'calories' ? <PrimaryButton label="Save to progress" onPress={saveStat} /> : null}
+      {mode !== 'calories' ? <PrimaryButton label="Save to progress" onPress={saveStat} disabled={typedInvalid} /> : null}
       {savedNote ? <AppText variant="caption" color={theme.colors.successText}>{savedNote}</AppText> : null}
       <Disclaimer />
     </Screen>

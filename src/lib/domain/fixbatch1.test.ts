@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFICIT_UNAVAILABLE_MESSAGE } from './projection';
 import {
   ACTIVITY_FACTORS,
   assessTargets,
@@ -118,7 +119,7 @@ describe('O-5c / C-6: a 55 kg, 60 y man asking for a cut gets no cut', () => {
     expect(plan.goalAllowed).toBe(false);
     expect(plan.goal).toBe('maintain');
     expect(plan.kcal).toBe(1506);
-    expect(plan.goalBlockReason).toMatch(/not available/);
+    expect(plan.goalBlockReason).toBe(DEFICIT_UNAVAILABLE_MESSAGE);
     expect(check(plan, 'male', 55, plan.goal).blocking).toBe(false);
     const projection = projectV1({
       weight_kg: 55, height_cm: 160, age: 60, sex: 'male', activity_factor: 1.2, daily_offset_kcal: -300,

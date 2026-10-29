@@ -10,6 +10,7 @@ import {
   feetInchesToCm,
   lbToKg,
   parseDecimal,
+  targetNotices,
   validateAge,
   validateBodyFat,
   validateHeightCm,
@@ -84,6 +85,10 @@ export default function OnboardingScreen() {
   if (data.profile?.onboardingComplete) return <Redirect href="/(tabs)" />;
 
   const bmi = heightCm != null && weightKg != null ? bmiMetric(weightKg, heightCm) : null;
+  // What the Plan step shows right now: the suggestion until the user edits, then their numbers.
+  const shownDraft = targetsEdited || !plan
+    ? { kcal: parseDecimal(kcalText), proteinG: parseDecimal(proteinText), carbsG: parseDecimal(carbText), fatG: parseDecimal(fatTargetText) }
+    : { kcal: plan.kcal, proteinG: plan.proteinG, carbsG: plan.carbsG, fatG: plan.fatG };
 
   function next() {
     setShowErrors(true);
@@ -145,7 +150,7 @@ export default function OnboardingScreen() {
       targets,
       onboardingComplete: true,
     };
-    await saveProfile(profile);
+    if (!(await saveProfile(profile))) return; // the banner explains why nothing was saved
     router.replace('/(tabs)');
   }
 
@@ -281,12 +286,11 @@ export default function OnboardingScreen() {
           {plan.fatTrimmed && !targetsEdited ? (
             <AppText variant="caption" color={theme.colors.textSecondary}>Fat was lowered toward its minimum so carbs would not go below zero.</AppText>
           ) : null}
-          {plan.macroOvershoot && !targetsEdited ? (
-            <AppText variant="caption" color={theme.colors.warningText}>Protein and fat already add up to {plan.macroKcal} kcal, a little above the {plan.kcal} kcal target.</AppText>
-          ) : null}
-          {plan.veryLowCarb && !targetsEdited ? (
-            <AppText variant="caption" color={theme.colors.warningText}>Carbs are under 50 g. That is very low for most people. Consider raising calories or lowering fat or protein. This is a warning, not a block.</AppText>
-          ) : null}
+          {targetNotices(shownDraft).map((notice) => (
+            <AppText key={notice.message} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>
+              {notice.message}
+            </AppText>
+          ))}
         </View>
       ) : null}
 
@@ -326,7 +330,7 @@ export default function OnboardingScreen() {
       carbsG: parseDecimal(carbText),
       fatG: parseDecimal(fatTargetText),
     }, sex, plan.bmr, weightKg, plan.tdee, plan.goal);
-    return review.issues.find((issue) => issue.field === field)?.message ?? null;
+    return review.issues.find((issue) => issue.field === field && issue.blocking)?.message ?? null;
   }
 }
 

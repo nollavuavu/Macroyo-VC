@@ -13,7 +13,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../state/AppContext';
+import { useApp, useTheme } from '../state/AppContext';
 import { borderStrong } from '../theme/extras';
 import type { Theme, TypographyKey } from '../theme/theme';
 
@@ -26,7 +26,11 @@ export function AppText({
   style,
   children,
   numberOfLines,
+  testID,
+  accessibilityRole,
 }: {
+  testID?: string;
+  accessibilityRole?: 'alert' | 'text';
   variant?: TypographyKey;
   color?: string;
   style?: StyleProp<TextStyle>;
@@ -36,6 +40,8 @@ export function AppText({
   const theme = useTheme();
   return (
     <Text
+      testID={testID}
+      accessibilityRole={accessibilityRole}
       maxFontSizeMultiplier={2}
       numberOfLines={numberOfLines}
       style={[theme.typography[variant], { color: color ?? theme.colors.textPrimary }, style]}
@@ -79,7 +85,27 @@ export function Screen({
   );
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background, paddingTop: insets.top }}>
+      <StorageBanner />
       {body}
+    </View>
+  );
+}
+
+/** Shows save/read failures from the app store. When stored data was unreadable, offers the explicit reset. */
+export function StorageBanner() {
+  const theme = useTheme();
+  const { error, readFailed, resetAll } = useApp();
+  if (!error) return null;
+  return (
+    <View
+      accessibilityRole="alert"
+      testID="storage-banner"
+      style={{ paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm, gap: theme.spacing.sm }}
+    >
+      <AppText variant="caption" color={theme.colors.warningText}>{error}</AppText>
+      {readFailed ? (
+        <SecondaryButton label="Erase unreadable data and start fresh" onPress={() => { void resetAll(); }} testID="reset-unreadable" />
+      ) : null}
     </View>
   );
 }

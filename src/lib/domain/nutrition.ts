@@ -4,6 +4,7 @@
  */
 
 import {
+  DEFICIT_UNAVAILABLE_MESSAGE,
   bmrMifflin,
   defaultFloorKcal,
   maxSafeOffset,
@@ -65,6 +66,23 @@ export function feetInchesToCm(feet: number, inches: number): number {
   return inchesToCm(feet * 12 + inches);
 }
 
+/** Feet and inches with inches rounded to 0.1 and never shown as 12: "5 ft 12 in" becomes 6 ft 0 in. */
+export function normalizeFeetInches(feet: number, inches: number): { feet: number; inches: number } {
+  const totalTenths = Math.round(roundHalfUp(feet * 12 + inches, 1) * 10);
+  const wholeFeet = Math.floor(totalTenths / 120);
+  return { feet: wholeFeet, inches: (totalTenths - wholeFeet * 120) / 10 };
+}
+
+/** Keep the stored value when the user did not touch the text, so display rounding never drifts it. */
+export function valueUnlessUnchanged(
+  text: string,
+  initialText: string,
+  stored: number,
+  parsed: number | null,
+): number | null {
+  return text === initialText ? stored : parsed;
+}
+
 export function cmToFeetInches(cm: number): { feet: number; inches: number } {
   const total = cmToInches(cm);
   let feet = Math.floor(total / 12);
@@ -76,13 +94,27 @@ export function cmToFeetInches(cm: number): { feet: number; inches: number } {
   return { feet, inches };
 }
 
-/** Accepts 80.5 and 80,5. Returns null for empty or non-numeric text. */
+/**
+ * True for text like "1,234" or "12,345": one to three digits, a comma, exactly three digits.
+ * That could be a thousands separator (1234) or a decimal comma (1.234), so we refuse to guess.
+ * A leading 0 ("0,125") is unambiguous and stays a decimal.
+ */
+export function isAmbiguousThousands(raw: string): boolean {
+  return /^[-+]?[1-9]\d{0,2},\d{3}$/.test(raw.trim());
+}
+
+/**
+ * Accepts 80, 80.5, 80,5, ".5" and "80." (a trailing separator while typing).
+ * Returns null for empty or non-numeric text, internal spaces ("80 5"), and "1,234"-style text,
+ * which is ambiguous between a thousands separator and a decimal comma. Rejecting is the safe
+ * choice: a weight of 1.234 kg or a calorie target of 1234 would both be silent mistakes.
+ */
 export function parseDecimal(raw: string): number | null {
-  const text = raw.trim().replace(/\s/g, '');
+  const text = raw.trim();
   if (!text) return null;
-  if (!/^[-+]?(\d+([.,]\d+)?|[.,]\d+)$/.test(text)) return null;
-  const normalized = text.replace(',', '.');
-  const value = Number(normalized);
+  if (isAmbiguousThousands(text)) return null;
+  if (!/^[-+]?(\d+([.,]\d*)?|[.,]\d+)$/.test(text)) return null;
+  const value = Number(text.replace(',', '.'));
   return Number.isFinite(value) ? value : null;
 }
 
@@ -341,7 +373,7 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
     } else if (bmi < 18.5) {
       goalBlockReason = `BMI is ${roundHalfUp(bmi, 1).toFixed(1)}, under 18.5. A cut is not offered. Maintenance or a surplus is available, and a clinician is the right next step.`;
     } else if (deficitUnavailable) {
-      goalBlockReason = `A weight-loss target is not available. The largest safe deficit is ${roundHalfUp(maxOffset, 1).toFixed(1)} kcal/day, under 100, so intake would sit on the calorie floor.`;
+      goalBlockReason = DEFICIT_UNAVAILABLE_MESSAGE;
     }
   }
 
@@ -436,6 +468,58 @@ export interface TargetIssue {
   message: string;
 }
 
+/** Carbs under this many grams get a standalone warning (spec 2.4: "under 50 g/day"). */
+export const LOW_CARB_WARNING_G = 50;
+/** Softer note, optional in the spec: under 100 g can be hard to sustain. */
+export const LOW_CARB_NOTE_G = 100;
+
+/** Calories implied by the grams, compared with the kcal target: tolerance is max(10 kcal, 1% of target). */
+export function macroMismatchTolerance(kcal: number): number {
+  return Math.max(10, kcal * 0.01);
+}
+
+/**
+ * Non-blocking notices for a target draft, independent of the calorie floor and of each other:
+ * - carbs under 50 g (and a softer note under 100 g), whenever the carbs number is valid;
+ * - P*4 + C*4 + F*9 more than max(10 kcal, 1%) above OR below the kcal target.
+ * Use it live while the user types and again on save.
+ */
+export function targetNotices(draft: TargetDraft): TargetIssue[] {
+  const issues: TargetIssue[] = [];
+  if (draft.carbsG != null && draft.carbsG >= 0 && draft.carbsG < LOW_CARB_NOTE_G) {
+    issues.push({
+      field: 'carbsG',
+      blocking: false,
+      message: draft.carbsG < LOW_CARB_WARNING_G
+        ? 'Carbs are under 50 g. That is very low for most people. Consider raising calories or lowering fat or protein. This is a warning, not a block.'
+        : 'Carbs are under 100 g. That can be hard to sustain. This is a warning, not a block.',
+    });
+  }
+  if (
+    draft.kcal != null &&
+    draft.kcal > 0 &&
+    draft.proteinG != null &&
+    draft.carbsG != null &&
+    draft.fatG != null &&
+    draft.proteinG >= 0 &&
+    draft.carbsG >= 0 &&
+    draft.fatG >= 0
+  ) {
+    const energy = macroEnergy(draft.proteinG, draft.carbsG, draft.fatG);
+    const diff = energy - draft.kcal;
+    if (Math.abs(diff) > macroMismatchTolerance(draft.kcal)) {
+      issues.push({
+        field: 'kcal',
+        blocking: false,
+        message: diff > 0
+          ? `Protein, carbs, and fat add up to ${Math.round(energy)} kcal, which is above the ${Math.round(draft.kcal)} kcal target.`
+          : `Protein, carbs, and fat add up to ${Math.round(energy)} kcal, which is below the ${Math.round(draft.kcal)} kcal target. About ${Math.round(-diff)} kcal is not assigned to any macro.`,
+      });
+    }
+  }
+  return issues;
+}
+
 export function assessTargets(
   draft: TargetDraft,
   sex: Sex,
@@ -497,34 +581,7 @@ export function assessTargets(
     }
   }
 
-  if (
-    draft.kcal != null &&
-    draft.proteinG != null &&
-    draft.carbsG != null &&
-    draft.fatG != null &&
-    draft.kcal > 0 &&
-    draft.proteinG >= 0 &&
-    draft.carbsG >= 0 &&
-    draft.fatG >= 0
-  ) {
-    const energy = macroEnergy(draft.proteinG, draft.carbsG, draft.fatG);
-    if (energy - draft.kcal > 10) {
-      issues.push({
-        field: 'kcal',
-        blocking: false,
-        message: `Protein, carbs, and fat add up to ${Math.round(energy)} kcal, which is above the ${Math.round(draft.kcal)} kcal target.`,
-      });
-    }
-    if (draft.carbsG < 100) {
-      issues.push({
-        field: 'carbsG',
-        blocking: false,
-        message: draft.carbsG < 50
-          ? 'Carbs are under 50 g. That is very low for most people. Consider raising calories or lowering fat or protein.'
-          : 'Carbs are under 100 g. That can be hard to sustain. This is a warning, not a block.',
-      });
-    }
-  }
+  issues.push(...targetNotices(draft));
 
   return { issues, blocking: issues.some((issue) => issue.blocking) };
 }
@@ -648,46 +705,11 @@ export interface QuickAddInput {
   grams: number | null;
 }
 
-export function validateQuickAdd(input: QuickAddInput): { issues: string[]; mismatch: string | null } {
-  const issues: string[] = [];
-  if (!input.name.trim()) issues.push('Enter a name.');
-  if (input.name.trim().length > 200) issues.push('Use a name of 200 characters or fewer.');
-  if (input.kcal == null) issues.push('Enter calories as a number.');
-  else if (input.kcal < 0) issues.push('Calories cannot be negative.');
-  else if (input.kcal > 10000) issues.push('One entry cannot be over 10,000 kcal.');
-  for (const [label, value] of [
-    ['Protein', input.proteinG],
-    ['Carbs', input.carbsG],
-    ['Fat', input.fatG],
-  ] as const) {
-    if (value == null) issues.push(`Enter ${label.toLowerCase()} as a number, or 0.`);
-    else if (value < 0) issues.push(`${label} cannot be negative.`);
-  }
-  if (input.fiberG != null && input.fiberG < 0) issues.push('Fiber cannot be negative.');
-  const grams = validatePortionGrams(input.grams);
-  if (!grams.ok && grams.message) issues.push(grams.message);
-  let mismatch: string | null = null;
-  if (
-    input.kcal != null &&
-    input.proteinG != null &&
-    input.carbsG != null &&
-    input.fatG != null &&
-    input.kcal >= 0 &&
-    input.proteinG >= 0 &&
-    input.carbsG >= 0 &&
-    input.fatG >= 0
-  ) {
-    const energy = macroEnergy(input.proteinG, input.carbsG, input.fatG);
-    if (input.kcal > 0 && Math.abs(energy - input.kcal) > Math.max(10, input.kcal * 0.1)) {
-      mismatch = `Those macros add up to about ${Math.round(energy)} kcal, not ${Math.round(input.kcal)}. You can still save the entry.`;
-    }
-  }
-  return { issues, mismatch };
-}
-
 export type QuickAddField = 'name' | 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'grams';
 
-/** Same rules as validateQuickAdd, keyed by field so the message can sit under the input it is about. */
+export const MAX_ENTRY_MACRO_G = 2000;
+
+/** Field-keyed errors for a quick add. validateQuickAdd and the inline messages both come from here. */
 export function quickAddFieldErrors(input: QuickAddInput): Partial<Record<QuickAddField, string>> {
   const errors: Partial<Record<QuickAddField, string>> = {};
   if (!input.name.trim()) errors.name = 'Enter a name.';
@@ -700,13 +722,107 @@ export function quickAddFieldErrors(input: QuickAddInput): Partial<Record<QuickA
     ['carbsG', 'carbs', input.carbsG],
     ['fatG', 'fat', input.fatG],
   ] as const) {
+    const title = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
     if (value == null) errors[field] = `Enter ${label} as a number, or 0.`;
-    else if (value < 0) errors[field] = `${label.charAt(0).toUpperCase()}${label.slice(1)} cannot be negative.`;
+    else if (value < 0) errors[field] = `${title} cannot be negative.`;
+    else if (value > MAX_ENTRY_MACRO_G) errors[field] = `${title} is above 2,000 g. Check the number.`;
   }
   if (input.fiberG != null && input.fiberG < 0) errors.fiberG = 'Fiber cannot be negative.';
+  else if (input.fiberG != null && input.fiberG > MAX_ENTRY_MACRO_G) errors.fiberG = `Fiber is above 2,000 g. Check the number.`;
   const grams = validatePortionGrams(input.grams);
   if (!grams.ok && grams.message) errors.grams = grams.message;
+  // Protein, carbs and fat cannot weigh more than the portion itself (0.5 g of slack for rounding).
+  if (
+    grams.ok &&
+    input.grams != null &&
+    !errors.proteinG && !errors.carbsG && !errors.fatG &&
+    input.proteinG != null && input.carbsG != null && input.fatG != null
+  ) {
+    const total = input.proteinG + input.carbsG + input.fatG;
+    if (total > input.grams + 0.5) {
+      errors.grams = `Protein, carbs and fat add up to ${roundHalfUp(total, 1)} g, which is more than the ${roundHalfUp(input.grams, 1)} g portion. Check the numbers or raise the portion.`;
+    }
+  }
   return errors;
+}
+
+export function quickAddMismatch(input: QuickAddInput): string | null {
+  if (
+    input.kcal != null &&
+    input.proteinG != null &&
+    input.carbsG != null &&
+    input.fatG != null &&
+    input.kcal > 0 &&
+    input.proteinG >= 0 &&
+    input.carbsG >= 0 &&
+    input.fatG >= 0
+  ) {
+    const energy = macroEnergy(input.proteinG, input.carbsG, input.fatG);
+    if (Math.abs(energy - input.kcal) > Math.max(10, input.kcal * 0.1)) {
+      return `Those macros add up to about ${Math.round(energy)} kcal, not ${Math.round(input.kcal)}.`;
+    }
+  }
+  return null;
+}
+
+export function validateQuickAdd(input: QuickAddInput): { issues: string[]; mismatch: string | null } {
+  const issues = Object.values(quickAddFieldErrors(input));
+  return { issues, mismatch: quickAddMismatch(input) };
+}
+
+export type QuickAddDecision =
+  | { action: 'errors'; errors: Partial<Record<QuickAddField, string>> }
+  | { action: 'confirm'; warning: string }
+  | { action: 'save' };
+
+/**
+ * What Save should do. Errors block. A kcal/macro mismatch keeps the card open with the warning
+ * and a "Save anyway" button; once the user confirms, it saves.
+ */
+export function quickAddDecision(input: QuickAddInput, confirmed: boolean): QuickAddDecision {
+  const errors = quickAddFieldErrors(input);
+  if (Object.keys(errors).length > 0) return { action: 'errors', errors };
+  const warning = quickAddMismatch(input);
+  if (warning && !confirmed) return { action: 'confirm', warning };
+  return { action: 'save' };
+}
+
+export type TypedMeasureKind = 'height' | 'weight' | 'age';
+
+const TYPED_RANGE = {
+  height: { min: 120, max: 230 },
+  weight: { min: 30, max: 250 },
+  age: { min: 18, max: 120 },
+} as const;
+
+/**
+ * Validates the raw text typed into a Calc box (not the clamped state behind it).
+ * Calc ranges match its sliders: 120-230 cm, 30-250 kg, 18-120 years.
+ * `value` is in cm / kg / years.
+ */
+export function validateTypedMeasure(
+  kind: TypedMeasureKind,
+  raw: string,
+  units: 'metric' | 'imperial',
+): { ok: boolean; value: number | null; message: string | null } {
+  const range = TYPED_RANGE[kind];
+  const imperial = units === 'imperial' && kind !== 'age';
+  const unit = kind === 'age' ? 'years' : kind === 'height' ? (imperial ? 'in' : 'cm') : imperial ? 'lb' : 'kg';
+  const lo = imperial ? (kind === 'height' ? Math.ceil(range.min / CM_PER_IN) : Math.ceil(range.min / KG_PER_LB)) : range.min;
+  const hi = imperial ? (kind === 'height' ? Math.floor(range.max / CM_PER_IN) : Math.floor(range.max / KG_PER_LB)) : range.max;
+  const rangeText = `Enter ${kind === 'age' ? 'an' : 'a'} ${kind} from ${lo} to ${hi} ${unit}.`;
+  const parsed = parseDecimal(raw);
+  if (parsed == null) {
+    const message = isAmbiguousThousands(raw)
+      ? 'Type the number without a thousands separator, like 180 or 80.5.'
+      : raw.trim() === ''
+        ? `Enter your ${kind}.`
+        : rangeText;
+    return { ok: false, value: null, message };
+  }
+  const value = imperial ? (kind === 'height' ? parsed * CM_PER_IN : parsed * KG_PER_LB) : parsed;
+  if (!(value >= range.min - 1e-9 && value <= range.max + 1e-9)) return { ok: false, value: null, message: rangeText };
+  return { ok: true, value, message: null };
 }
 
 /** Preview of a cut that the safety rules will not offer. Useful for explanations. */

@@ -4,14 +4,13 @@ import { useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import {
   parseDecimal,
-  quickAddFieldErrors,
+  quickAddDecision,
   validatePortionGrams,
-  validateQuickAdd,
   type QuickAddField,
 } from '@/src/lib/domain';
 import { MEALS, MEAL_LABEL, addDays, friendlyDate, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
 import { formatAmount, formatKcal } from '@/src/lib/format';
-import { entryFromPer100 } from '@/src/lib/logging';
+import { entryFromPer100, entryFromTotals, scalePortion } from '@/src/lib/logging';
 import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
 import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
@@ -22,17 +21,27 @@ import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, use
 
 const foods = loadFoods();
 
+interface EditFields {
+  name: string;
+  /** False until the user types in a macro field; until then macros follow the grams. */
+  touched: boolean;
+  kcal: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  fiber: string;
+}
+
 export default function LogScreen() {
   const theme = useTheme();
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
-  const { data, addLog, updateLog, deleteLog, restoreLog } = useApp();
+  const { data, addLog, updateLog, deleteLog, restoreLog, selectedDate: date, setSelectedDate: setDate } = useApp();
   const initialMeal = isMeal(params.meal) ? params.meal : mealForHour(new Date().getHours());
   const [meal, setMeal] = useState<Meal>(initialMeal);
-  const [date, setDate] = useState(typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : localDateISO());
   useEffect(() => {
     if (isMeal(params.meal)) setMeal(params.meal);
     if (typeof params.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) setDate(params.date);
-  }, [params.meal, params.date]);
+  }, [params.meal, params.date, setDate]);
   const [query, setQuery] = useState('');
   const debounced = useDebounced(query, motion.searchDebounce);
   const [selected, setSelected] = useState<Food | null>(null);
@@ -50,8 +59,13 @@ export default function LogScreen() {
   const [quickErrors, setQuickErrors] = useState<Partial<Record<QuickAddField, string>>>({});
   const [shown, setShown] = useState(SEARCH_PAGE_SIZE);
   useEffect(() => setShown(SEARCH_PAGE_SIZE), [debounced]);
-  const [mismatch, setMismatch] = useState<string | null>(null);
-  const [undo, setUndo] = useState<LogEntry | null>(null);
+  const [undo, setUndo] = useState<{ entry: LogEntry; index: number } | null>(null);
+  const [quickWarning, setQuickWarning] = useState<string | null>(null);
+  // Editing any quick-add number withdraws the warning so it never describes stale numbers.
+  useEffect(() => setQuickWarning(null), [quickName, quickKcal, quickP, quickC, quickF, quickFiber, quickGrams]);
+  const [edit, setEdit] = useState<EditFields | null>(null);
+  const [editErrors, setEditErrors] = useState<Partial<Record<QuickAddField, string>>>({});
+  const [editWarning, setEditWarning] = useState<string | null>(null);
 
   const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
   const results = allResults.slice(0, shown);
@@ -70,6 +84,9 @@ export default function LogScreen() {
     setEditing(entry);
     setGramsText(String(entry.grams));
     setFormError(null);
+    setEdit({ name: entry.name, touched: false, kcal: '', protein: '', carbs: '', fat: '', fiber: '' });
+    setEditErrors({});
+    setEditWarning(null);
   }
 
   async function savePortion() {
@@ -80,24 +97,11 @@ export default function LogScreen() {
       return;
     }
     if (editing) {
-      await updateLog(entryFromPer100({
-        id: editing.id,
-        name: editing.name,
-        foodId: editing.foodId,
-        date,
-        meal,
-        grams,
-        kcalPer100: editing.kcalPer100,
-        proteinPer100: editing.proteinPer100,
-        carbsPer100: editing.carbsPer100,
-        fatPer100: editing.fatPer100,
-        fiberPer100: editing.fiberPer100,
-      }));
-      setEditing(null);
+      await saveEdit(grams, false);
       return;
     }
     if (!selected) return;
-    await addLog(entryFromPer100({
+    const added = await addLog(entryFromPer100({
       name: selected.name,
       foodId: selected.id,
       date,
@@ -109,10 +113,80 @@ export default function LogScreen() {
       fatPer100: selected.fatPer100g,
       fiberPer100: selected.fiberPer100g,
     }));
-    setSelected(null);
+    if (added) setSelected(null);
   }
 
-  async function saveQuick() {
+  function editedMacros(): { kcal: string; protein: string; carbs: string; fat: string; fiber: string } {
+    if (!editing || !edit) return { kcal: '', protein: '', carbs: '', fat: '', fiber: '' };
+    if (edit.touched) return edit;
+    const shown = scalePortion(
+      { kcal: editing.kcalPer100, protein: editing.proteinPer100, carbs: editing.carbsPer100, fat: editing.fatPer100, fiber: editing.fiberPer100 },
+      parseDecimal(gramsText),
+    );
+    return {
+      kcal: shown ? String(shown.kcal) : '',
+      protein: shown ? String(shown.protein) : '',
+      carbs: shown ? String(shown.carbs) : '',
+      fat: shown ? String(shown.fat) : '',
+      fiber: shown?.fiber == null ? '' : String(shown.fiber),
+    };
+  }
+
+  function changeEdit(field: 'kcal' | 'protein' | 'carbs' | 'fat' | 'fiber', text: string) {
+    if (!edit) return;
+    setEdit({ ...edit, ...editedMacros(), [field]: text, touched: true });
+    setEditWarning(null);
+  }
+
+  async function saveEdit(grams: number, confirmed: boolean) {
+    if (!editing || !edit) return;
+    const macros = editedMacros();
+    const fiberText = macros.fiber.trim();
+    const input = {
+      name: edit.name,
+      kcal: parseDecimal(macros.kcal),
+      proteinG: parseDecimal(macros.protein),
+      carbsG: parseDecimal(macros.carbs),
+      fatG: parseDecimal(macros.fat),
+      fiberG: fiberText === '' ? null : parseDecimal(fiberText),
+      grams,
+    };
+    const decision = quickAddDecision(input, confirmed || !edit.touched);
+    const errors = decision.action === 'errors' ? decision.errors : {};
+    if (fiberText !== '' && input.fiberG == null) errors.fiberG = 'Enter fiber as a number, or leave it blank.';
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      setEditWarning(null);
+      return;
+    }
+    if (decision.action === 'confirm') {
+      setEditErrors({});
+      setEditWarning(decision.warning);
+      return;
+    }
+    if (input.kcal == null || input.proteinG == null || input.carbsG == null || input.fatG == null) return;
+    const base = { id: editing.id, name: input.name, foodId: editing.foodId, date: editing.date, meal: editing.meal };
+    const ok = await updateLog(
+      edit.touched
+        ? entryFromTotals({ ...base, grams, kcal: input.kcal, proteinG: input.proteinG, carbsG: input.carbsG, fatG: input.fatG, fiberG: input.fiberG })
+        : entryFromPer100({
+            ...base,
+            grams,
+            kcalPer100: editing.kcalPer100,
+            proteinPer100: editing.proteinPer100,
+            carbsPer100: editing.carbsPer100,
+            fatPer100: editing.fatPer100,
+            fiberPer100: editing.fiberPer100,
+          }),
+    );
+    if (!ok) return;
+    setEditing(null);
+    setEdit(null);
+    setEditErrors({});
+    setEditWarning(null);
+  }
+
+  async function saveQuick(confirmed = false) {
     const fiberText = quickFiber.trim();
     const input = {
       name: quickName,
@@ -123,35 +197,37 @@ export default function LogScreen() {
       fiberG: fiberText === '' ? null : parseDecimal(fiberText),
       grams: parseDecimal(quickGrams),
     };
-    const errors = quickAddFieldErrors(input);
+    const decision = quickAddDecision(input, confirmed);
+    const errors = decision.action === 'errors' ? decision.errors : {};
     if (fiberText !== '' && input.fiberG == null) errors.fiberG = 'Enter fiber as a number, or leave it blank if you do not know it.';
     if (Object.keys(errors).length > 0) {
       setQuickErrors(errors);
       setFormError(null);
-      setMismatch(null);
+      setQuickWarning(null);
       return;
     }
-    const review = validateQuickAdd(input);
-    if (review.issues.length > 0 || input.kcal == null || input.proteinG == null || input.carbsG == null || input.fatG == null || input.grams == null) {
-      setFormError(review.issues[0] ?? 'Check the quick add fields.');
-      setMismatch(null);
+    if (decision.action === 'confirm') {
+      // Keep the card open: the warning stays visible next to a "Save anyway" button.
+      setQuickErrors({});
+      setQuickWarning(decision.warning);
       return;
     }
+    if (input.kcal == null || input.proteinG == null || input.carbsG == null || input.fatG == null || input.grams == null) return;
     setQuickErrors({});
-    setMismatch(review.mismatch);
-    const per100 = 100 / input.grams;
-    await addLog(entryFromPer100({
+    setQuickWarning(null);
+    const ok = await addLog(entryFromTotals({
       name: input.name,
       foodId: null,
       date,
       meal,
       grams: input.grams,
-      kcalPer100: input.kcal * per100,
-      proteinPer100: input.proteinG * per100,
-      carbsPer100: input.carbsG * per100,
-      fatPer100: input.fatG * per100,
-      fiberPer100: input.fiberG == null ? null : input.fiberG * per100,
+      kcal: input.kcal,
+      proteinG: input.proteinG,
+      carbsG: input.carbsG,
+      fatG: input.fatG,
+      fiberG: input.fiberG,
     }));
+    if (!ok) return;
     setQuickName('');
     setQuickKcal('');
     setQuickP('');
@@ -166,14 +242,15 @@ export default function LogScreen() {
     const removed = await deleteLog(entry.id);
     if (!removed) return;
     setUndo(removed);
-    setTimeout(() => setUndo((current) => (current?.id === removed.id ? null : current)), motion.toast);
+    setTimeout(() => setUndo((current) => (current?.entry.id === removed.entry.id ? null : current)), motion.toast);
   }
 
   const preview = selected
-    ? scalePreview(selected.kcalPer100g, selected.proteinPer100g, selected.carbsPer100g, selected.fatPer100g, selected.fiberPer100g, parseDecimal(gramsText))
-    : editing
-      ? scalePreview(editing.kcalPer100, editing.proteinPer100, editing.carbsPer100, editing.fatPer100, editing.fiberPer100, parseDecimal(gramsText))
-      : null;
+    ? scalePortion(
+        { kcal: selected.kcalPer100g, protein: selected.proteinPer100g, carbs: selected.carbsPer100g, fat: selected.fatPer100g, fiber: selected.fiberPer100g },
+        parseDecimal(gramsText),
+      )
+    : null;
 
   const dayButtonStyle = {
     width: theme.sizes.minTouchTarget,
@@ -194,11 +271,11 @@ export default function LogScreen() {
         ))}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Previous day" onPress={() => setDate((value) => addDays(value, -1))} style={dayButtonStyle}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous day" onPress={() => setDate(addDays(date, -1))} style={dayButtonStyle}>
           <ChevronLeft color={theme.colors.primary} size={22} strokeWidth={2.2} />
         </Pressable>
         <AppText variant="bodyMedium">{friendlyDate(date)}</AppText>
-        <Pressable accessibilityRole="button" accessibilityLabel="Next day" onPress={() => setDate((value) => addDays(value, 1))} style={dayButtonStyle}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next day" onPress={() => setDate(addDays(date, 1))} style={dayButtonStyle}>
           <ChevronRight color={theme.colors.primary} size={22} strokeWidth={2.2} />
         </Pressable>
       </View>
@@ -212,7 +289,10 @@ export default function LogScreen() {
             {editing ? 'Editing this entry' : `${formatAmount(selected?.kcalPer100g ?? 0, 0)} kcal per 100 g`}
             {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${formatAmount(selected.servingSizeG)} g)` : ''}
           </AppText>
-          <Field label="Grams" value={gramsText} onChangeText={setGramsText} suffix="g" error={formError} />
+          {editing && edit ? (
+            <Field label="Name" value={edit.name} onChangeText={(text) => setEdit({ ...edit, name: text })} error={editErrors.name} keyboard="default" />
+          ) : null}
+          <Field label="Grams" value={gramsText} onChangeText={setGramsText} suffix="g" error={formError ?? editErrors.grams} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
               <Chip label={selected.servingLabel ?? 'Serving'} detail={`${formatAmount(selected.servingSizeG)} g`} selected={gramsText === String(selected.servingSizeG)} onPress={() => setGramsText(String(selected.servingSizeG))} />
@@ -228,8 +308,31 @@ export default function LogScreen() {
               <AppText variant="caption" color={theme.colors.textSecondary}>Fiber {formatFiber(preview.fiber)} g</AppText>
             </View>
           ) : null}
+          {editing && edit ? (
+            <View style={{ gap: theme.spacing.md }}>
+              {(() => {
+                const shown = editedMacros();
+                return (
+                  <>
+                    <Field label="Calories" value={shown.kcal} onChangeText={(text) => changeEdit('kcal', text)} error={editErrors.kcal} suffix="kcal" />
+                    <Field label="Protein" value={shown.protein} onChangeText={(text) => changeEdit('protein', text)} error={editErrors.proteinG} labelColor={theme.macroColors.protein} suffix="g" />
+                    <Field label="Carbs" value={shown.carbs} onChangeText={(text) => changeEdit('carbs', text)} error={editErrors.carbsG} labelColor={theme.macroColors.carbs} suffix="g" />
+                    <Field label="Fat" value={shown.fat} onChangeText={(text) => changeEdit('fat', text)} error={editErrors.fatG} labelColor={theme.macroColors.fat} suffix="g" />
+                    <Field label="Fiber (blank if unknown)" value={shown.fiber} onChangeText={(text) => changeEdit('fiber', text)} error={editErrors.fiberG} suffix="g" />
+                  </>
+                );
+              })()}
+              {editWarning ? (
+                <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert">{editWarning} Fix the numbers, or save it as entered.</AppText>
+              ) : null}
+            </View>
+          ) : null}
+          {editing && editWarning ? (
+            <PrimaryButton label="Save anyway" onPress={() => { const grams = parseDecimal(gramsText); if (grams != null) void saveEdit(grams, true); }} />
+          ) : (
           <PrimaryButton label={editing ? 'Save changes' : `Add to ${MEAL_LABEL[meal]}`} onPress={savePortion} testID="add-food" />
-          <SecondaryButton label="Cancel" onPress={() => { setSelected(null); setEditing(null); setFormError(null); }} />
+          )}
+          <SecondaryButton label="Cancel" onPress={() => { setSelected(null); setEditing(null); setEdit(null); setFormError(null); setEditErrors({}); setEditWarning(null); }} />
         </Card>
       ) : null}
 
@@ -245,8 +348,19 @@ export default function LogScreen() {
           <Field label="Fiber (blank if unknown)" value={quickFiber} onChangeText={setQuickFiber} error={quickErrors.fiberG} suffix="g" />
           <Field label="Portion" value={quickGrams} onChangeText={setQuickGrams} error={quickErrors.grams} suffix="g" />
           {formError ? <AppText variant="caption" color={theme.colors.warningText}>{formError}</AppText> : null}
-          {mismatch ? <AppText variant="caption" color={theme.colors.warningText}>{mismatch}</AppText> : null}
-          <PrimaryButton label="Save quick add" onPress={saveQuick} />
+          {quickWarning ? (
+            <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="quick-warning">
+              {quickWarning} Fix the numbers, or save it as entered.
+            </AppText>
+          ) : null}
+          {quickWarning ? (
+            <>
+              <PrimaryButton label="Save anyway" onPress={() => saveQuick(true)} testID="quick-save-anyway" />
+              <SecondaryButton label="Edit numbers" onPress={() => setQuickWarning(null)} />
+            </>
+          ) : (
+            <PrimaryButton label="Save quick add" onPress={() => saveQuick(false)} testID="quick-save" />
+          )}
         </Card>
       ) : null}
 
@@ -306,8 +420,8 @@ export default function LogScreen() {
       ))}
       {undo ? (
         <Card>
-          <AppText>Removed {undo.name}.</AppText>
-          <SecondaryButton label="Undo" onPress={async () => { await restoreLog(undo); setUndo(null); }} />
+          <AppText>Removed {undo.entry.name}.</AppText>
+          <SecondaryButton label="Undo" onPress={async () => { await restoreLog(undo.entry, undo.index); setUndo(null); }} />
         </Card>
       ) : null}
     </Screen>
@@ -316,16 +430,4 @@ export default function LogScreen() {
 
 function isMeal(value: string | undefined): value is Meal {
   return !!value && (MEALS as string[]).includes(value);
-}
-
-function scalePreview(kcal: number, protein: number, carbs: number, fat: number, fiber: number | null, grams: number | null) {
-  if (grams == null) return null;
-  const scale = grams / 100;
-  return {
-    kcal: kcal * scale,
-    protein: protein * scale,
-    carbs: carbs * scale,
-    fat: fat * scale,
-    fiber: fiber == null ? null : fiber * scale,
-  };
 }

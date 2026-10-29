@@ -4,8 +4,8 @@ import { router } from 'expo-router';
 import { Drumstick, Droplets, Plus, Wheat } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderStrong } from '@/src/theme/extras';
-import { progressRatio, sumLogged } from '@/src/lib/domain';
-import { MEALS, MEAL_LABEL, addDays, dayAccessibilityLabel, formatLongDate, localDateISO, weekDates, type Meal } from '@/src/lib/dates';
+import { progressRatio, roundToSum, sumLogged } from '@/src/lib/domain';
+import { MEALS, MEAL_LABEL, addDays, dayAccessibilityLabel, formatLongDate, weekDates, type Meal } from '@/src/lib/dates';
 import { formatAmount, formatKcal } from '@/src/lib/format';
 import { formatFiber } from '@/src/lib/foods/foods';
 import type { LogEntry } from '@/src/lib/storage/types';
@@ -22,9 +22,8 @@ const MACRO_ICON = {
 export default function TodayScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { data, addLog } = useApp();
+  const { data, addLog, selectedDate: date, setSelectedDate: setDate } = useApp();
   const profile = data.profile;
-  const [date, setDate] = useState(localDateISO());
   const [toast, setToast] = useState<string | null>(null);
   const entries = data.logs.filter((entry) => entry.date === date);
   const totals = sumLogged(entries);
@@ -37,6 +36,15 @@ export default function TodayScreen() {
     for (const entry of entries) map.get(entry.meal)?.push(entry);
     return map;
   }, [entries]);
+
+  // Round once, from the same values: item rows add up to meal subtotals, and subtotals to the day total.
+  const kcalDisplay = useMemo(() => {
+    const ordered = MEALS.flatMap((meal) => grouped.get(meal) ?? []);
+    const { rounded, total } = roundToSum(ordered.map((entry) => entry.kcal));
+    const byId = new Map<string, number>();
+    ordered.forEach((entry, index) => byId.set(entry.id, rounded[index]));
+    return { byId, total };
+  }, [grouped]);
 
   async function copyYesterday() {
     const previous = data.logs.filter((entry) => entry.date === addDays(date, -1));
@@ -88,7 +96,7 @@ export default function TodayScreen() {
         </View>
 
         <Card>
-          <CalorieRing consumed={totals.kcal} target={targets?.kcal ?? 0} />
+          <CalorieRing consumed={kcalDisplay.total} target={targets?.kcal ?? 0} />
         </Card>
 
         <Card style={{ gap: theme.spacing.md }}>
@@ -134,7 +142,7 @@ export default function TodayScreen() {
         ) : (
           MEALS.map((meal) => {
             const items = grouped.get(meal) ?? [];
-            const subtotal = items.reduce((sum, item) => sum + item.kcal, 0);
+            const subtotal = items.reduce((sum, item) => sum + (kcalDisplay.byId.get(item.id) ?? 0), 0);
             return (
               <Card key={meal} style={{ gap: theme.spacing.sm }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.sizes.minTouchTarget }}>
@@ -147,7 +155,7 @@ export default function TodayScreen() {
                   <View key={item.id} style={{ paddingVertical: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
                     <AppText>{item.name}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>
-                      {formatAmount(item.grams)} g · {formatKcal(item.kcal)} kcal · P {formatAmount(item.proteinG)} · C {formatAmount(item.carbsG)} · F {formatAmount(item.fatG)} · fiber {formatFiber(item.fiberG)}
+                      {formatAmount(item.grams)} g · {formatKcal(kcalDisplay.byId.get(item.id) ?? item.kcal)} kcal · P {formatAmount(item.proteinG)} · C {formatAmount(item.carbsG)} · F {formatAmount(item.fatG)} · fiber {formatFiber(item.fiberG)}
                     </AppText>
                   </View>
                 ))}
