@@ -14,9 +14,12 @@ import {
   validateHeightCm,
   validateWeightKg,
   type ActivityLevel,
+  type BmrFormula,
   type Goal,
   type Sex,
+  type SexConstantChoice,
 } from '@/src/lib/domain';
+import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
 import { formatAmount } from '@/src/lib/format';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
@@ -123,7 +126,19 @@ function BodyEditor({
   const [activity, setActivity] = useState(profile.activity);
   const [goal, setGoal] = useState(profile.goal);
   const [pregnant, setPregnant] = useState(profile.pregnant);
+  const [formulaOverride, setFormulaOverride] = useState<BmrFormula | null>(profile.formulaOverride ?? null);
+  const [sexConstant, setSexConstant] = useState<SexConstantChoice | null>(profile.sexConstant ?? null);
   const [error, setError] = useState<string | null>(null);
+
+  // Live preview so the active formula, its BMR and the unspecified-sex note are always visible.
+  const previewPlan = (() => {
+    const age = parseDecimal(ageText);
+    const heightCm = profile.units === 'metric' ? parseDecimal(heightText) : heightFromImperial(heightText, inchText);
+    const weightKg = profile.units === 'metric' ? parseDecimal(weightText) : weightFromLb(weightText);
+    const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
+    if (age == null || heightCm == null || weightKg == null || !validateAge(age).ok || !validateHeightCm(heightCm).ok || !validateWeightKg(weightKg).ok || !validateBodyFat(bodyFat).ok) return null;
+    return { bodyFat, plan: buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: formulaOverride ?? undefined, sexConstant }) };
+  })();
 
   async function saveBody(recalculate: boolean) {
     const age = parseDecimal(ageText);
@@ -136,7 +151,7 @@ function BodyEditor({
       setError(failed?.message ?? 'Check the fields.');
       return;
     }
-    const plan = buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: profile.formula });
+    const plan = buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: formulaOverride ?? undefined, sexConstant });
     if (goal === 'cut' && !plan.goalAllowed) {
       setError(plan.goalBlockReason);
       return;
@@ -155,6 +170,8 @@ function BodyEditor({
       goal: plan.goal,
       pregnant,
       formula: plan.formula,
+      formulaOverride,
+      sexConstant: sex === 'unspecified' ? sexConstant : null,
       targets,
     });
     onNotice(profile.targets.custom && !recalculate ? 'Profile saved. Custom targets were kept.' : 'Profile saved and targets recalculated.');
@@ -169,6 +186,7 @@ function BodyEditor({
           <Chip key={option} label={option === 'unspecified' ? 'Unspecified' : option === 'female' ? 'Female' : 'Male'} selected={sex === option} onPress={() => setSex(option)} />
         ))}
       </View>
+      <SexConstantPicker sex={sex} value={sexConstant} onChange={setSexConstant} />
       <Field label="Age" value={ageText} onChangeText={setAgeText} keyboard="number" />
       {profile.units === 'metric' ? (
         <Field label="Height" value={heightText} onChangeText={setHeightText} suffix="cm" />
@@ -180,6 +198,7 @@ function BodyEditor({
       )}
       <Field label="Weight" value={weightText} onChangeText={setWeightText} suffix={profile.units === 'metric' ? 'kg' : 'lb'} />
       <Field label="Body fat % (optional)" value={fatText} onChangeText={setFatText} />
+      {previewPlan ? <FormulaPicker plan={previewPlan.plan} bodyFatEntered={previewPlan.bodyFat != null} onChange={setFormulaOverride} /> : null}
       {(Object.keys(ACTIVITY_DETAILS) as ActivityLevel[]).map((level) => (
         <Chip key={level} label={ACTIVITY_DETAILS[level].label} selected={activity === level} onPress={() => setActivity(level)} />
       ))}
@@ -219,7 +238,8 @@ function TargetEditor({
     activity: profile.activity,
     goal: profile.goal,
     pregnant: profile.pregnant,
-    formula: profile.formula,
+    formula: profile.formulaOverride ?? undefined,
+    sexConstant: profile.sexConstant,
   });
   const energy = (parseDecimal(protein) ?? 0) * 4 + (parseDecimal(carbs) ?? 0) * 4 + (parseDecimal(fat) ?? 0) * 9;
 
@@ -230,7 +250,7 @@ function TargetEditor({
       carbsG: parseDecimal(carbs),
       fatG: parseDecimal(fat),
     };
-    const review = assessTargets(draft, profile.sex, plan.bmr, profile.weightKg);
+    const review = assessTargets(draft, profile.sex, plan.bmr, profile.weightKg, plan.tdee, profile.goal);
     setIssues(review.issues.map((issue) => issue.message));
     if (review.blocking || draft.kcal == null || draft.proteinG == null || draft.carbsG == null || draft.fatG == null) return;
     await onSave({

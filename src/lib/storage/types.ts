@@ -1,4 +1,4 @@
-import type { ActivityLevel, BmrFormula, Goal, Sex } from '../domain/nutrition';
+import type { ActivityLevel, BmrFormula, Goal, Sex, SexConstantChoice } from '../domain/nutrition';
 import type { Meal } from '../dates';
 
 export type UnitSystem = 'metric' | 'imperial';
@@ -24,7 +24,12 @@ export interface Profile {
   units: UnitSystem;
   appearance: Appearance;
   pregnant: boolean;
+  /** The formula in use when the profile was saved (resolved). */
   formula: BmrFormula;
+  /** The user's explicit formula choice. Absent or null means automatic (Katch when body fat is entered). */
+  formulaOverride?: BmrFormula | null;
+  /** Unspecified sex only: male (+5) or female (−161) Mifflin constant. Absent or null means the average (−78). */
+  sexConstant?: SexConstantChoice | null;
   targets: Targets;
   onboardingComplete: true;
 }

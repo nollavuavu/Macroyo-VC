@@ -5,6 +5,10 @@ import {
   bindingLimit,
   bmiCategory,
   bmiMetric,
+  buildMacroPlan,
+  parseCustomOffset,
+  type BmrFormula,
+  type SexConstantChoice,
   ffmiValue,
   interpretFfmi,
   leanMassKg,
@@ -22,6 +26,7 @@ import { ACTIVITY_FACTORS } from '@/src/lib/domain';
 import { localDateISO, uid } from '@/src/lib/dates';
 import { formatAmount, formatSigned } from '@/src/lib/format';
 import { useApp, useTheme } from '@/src/state/AppContext';
+import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
 import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, Segmented } from '@/src/components/ui';
 
 type Mode = 'bmi' | 'ffmi' | 'calories';
@@ -41,7 +46,9 @@ export default function CalcScreen() {
   const [sex, setSex] = useState<Sex>(profile?.sex ?? 'female');
   const [age, setAge] = useState(profile?.age ?? 30);
   const [activity, setActivity] = useState<ActivityLevel>(profile?.activity ?? 'moderate');
-  const [direction, setDirection] = useState<Direction>('deficit');
+  const [toggleDirection, setDirection] = useState<Direction>('deficit');
+  const [formulaOverride, setFormulaOverride] = useState<BmrFormula | null>(profile?.formulaOverride ?? null);
+  const [sexConstant, setSexConstant] = useState<SexConstantChoice | null>(profile?.sexConstant ?? null);
   const [preset, setPreset] = useState<number | null>(250);
   const [customText, setCustomText] = useState('');
   const [savedNote, setSavedNote] = useState<string | null>(null);
@@ -58,33 +65,42 @@ export default function CalcScreen() {
   const nffmi = ffmi == null ? null : normalizedFfmi(ffmi, heightCm);
   const ffmiReading = nffmi == null ? null : interpretFfmi(sex, nffmi);
 
-  const bmrPreview = useMemo(() => {
-    return projectV1({
-      weight_kg: weightKg,
-      height_cm: heightCm,
-      age,
-      sex,
-      activity_factor: ACTIVITY_FACTORS[activity],
-      daily_offset_kcal: 0,
-    });
-  }, [activity, age, heightCm, sex, weightKg]);
+  // One resolved formula for Calc, Profile and onboarding: the user's override, else Katch when body fat is entered.
+  const plan = useMemo(
+    () => buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal: 'maintain', formula: formulaOverride ?? undefined, sexConstant }),
+    [activity, age, bodyFat, formulaOverride, heightCm, sex, sexConstant, weightKg],
+  );
+  const projectionBase = {
+    weight_kg: weightKg,
+    height_cm: heightCm,
+    age,
+    sex: plan.mifflinSex,
+    activity_factor: ACTIVITY_FACTORS[activity],
+    tdee_override_kcal: plan.tdee,
+    floor_kcal: plan.calorieFloor,
+  };
+  const bmrPreview = useMemo(
+    () => projectV1({ ...projectionBase, daily_offset_kcal: 0 }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activity, age, heightCm, plan.calorieFloor, plan.mifflinSex, plan.tdee, weightKg],
+  );
 
   const cap = bmrPreview.max_safe_offset_kcal;
+  const parsedCustom = parseCustomOffset(customText, toggleDirection);
+  // An explicit sign in the custom field wins over the toggle; otherwise the toggle decides.
+  const direction: Direction = customText.trim() && parsedCustom.valid ? parsedCustom.direction : toggleDirection;
   const presetAllowed = preset != null && !(direction === 'deficit' && (bmrPreview.deficit_unavailable || preset > cap + 1e-9));
-  const magnitude = customText.trim() ? (parseDecimal(customText) ?? 0) : presetAllowed && preset != null ? preset : 0;
+  const magnitude = customText.trim() ? parsedCustom.magnitude : presetAllowed && preset != null ? preset : 0;
   const requested = magnitude * (direction === 'deficit' ? -1 : 1);
 
   const projection = useMemo(() => {
     if (mode !== 'calories') return null;
     return projectV1({
-      weight_kg: weightKg,
-      height_cm: heightCm,
-      age,
-      sex,
-      activity_factor: ACTIVITY_FACTORS[activity],
+      ...projectionBase,
       daily_offset_kcal: direction === 'deficit' && bmrPreview.deficit_unavailable ? 0 : requested,
     });
-  }, [activity, age, bmrPreview.deficit_unavailable, direction, heightCm, mode, requested, sex, weightKg]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity, age, bmrPreview.deficit_unavailable, direction, heightCm, mode, plan.calorieFloor, plan.mifflinSex, plan.tdee, requested, weightKg]);
 
   const binding = bindingLimit(bmrPreview.max_safe_offset_components, cap);
 
@@ -197,13 +213,15 @@ export default function CalcScreen() {
             <AppText variant="secondary" color={theme.colors.textSecondary}>Maintenance</AppText>
             <AppText variant="metricNumber">{Math.round(projection.tdee_kcal)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>
-              Estimate from {sex === 'unspecified' ? 'the average Mifflin–St Jeor constant' : 'Mifflin–St Jeor'} · BMR {Math.round(projection.bmr_kcal)} kcal
+              Estimate · BMR {Math.round(plan.bmr)} kcal
             </AppText>
+            <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {(['female', 'male', 'unspecified'] as Sex[]).map((option) => (
                 <Chip key={option} label={option === 'unspecified' ? 'Unspecified' : option === 'female' ? 'Female' : 'Male'} selected={sex === option} onPress={() => setSex(option)} />
               ))}
             </View>
+            <SexConstantPicker sex={sex} value={sexConstant} onChange={setSexConstant} />
             <Field label="Age" value={String(age)} onChangeText={(value) => {
               const parsed = parseDecimal(value);
               if (parsed != null && parsed >= 18 && parsed <= 120) setAge(parsed);
@@ -249,9 +267,14 @@ export default function CalcScreen() {
             label="Custom kcal per day"
             value={customText}
             onChangeText={setCustomText}
-            placeholder="e.g. 300"
+            placeholder="e.g. 300 or -300"
           />
-          {direction === 'deficit' && !projection.deficit_unavailable && customText && (parseDecimal(customText) ?? 0) > cap ? (
+          {customText.trim() && !parsedCustom.valid ? (
+            <AppText variant="caption" color={theme.colors.warningText}>
+              {parsedCustom.message} Nothing is applied until the number is valid.
+            </AppText>
+          ) : null}
+          {direction === 'deficit' && !projection.deficit_unavailable && customText && parsedCustom.valid && parsedCustom.magnitude > cap ? (
             <AppText variant="caption" color={theme.colors.warningText}>
               That deficit is above the maximum of {formatAmount(cap)} kcal, so the projection uses the cap.
             </AppText>

@@ -14,6 +14,10 @@ export {
   bmiMetric,
   buildMacroPlan,
   calorieFloor,
+  effectiveCalorieFloor,
+  lowestPassingWhole,
+  mifflinSexFor,
+  PROTEIN_MAX_KCAL_SHARE,
   cmToFeetInches,
   cmToInches,
   explainCutBlock,
@@ -57,6 +61,7 @@ export type {
   MacroPlan,
   PlanInput,
   QuickAddInput,
+  SexConstantChoice,
   Sex,
   TargetDraft,
   TargetIssue,
@@ -84,3 +89,6 @@ export {
 } from './projection';
 
 export type { HorizonResult, OffsetComponents, ProjectionInput, ProjectionResult, ProjectionSex } from './projection';
+
+export { parseCustomOffset } from './offset';
+export type { OffsetDirection, ParsedOffset } from './offset';

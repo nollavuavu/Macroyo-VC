@@ -204,6 +204,23 @@ export function calorieFloor(sex: Sex, bmr: number): number {
   return Math.max(sexCalorieFloor(sex), bmr);
 }
 
+/**
+ * Effective floor = min(F, TDEE) where F = max(sex floor, BMR). The floor limits deficits only,
+ * so a person whose TDEE is already under F is never blocked from eating at maintenance.
+ */
+export function effectiveCalorieFloor(sex: Sex, bmr: number, tdee: number | null | undefined): number {
+  const f = calorieFloor(sex, bmr);
+  return tdee != null && Number.isFinite(tdee) ? Math.min(f, tdee) : f;
+}
+
+/**
+ * Targets are whole numbers while floors are fractional, so checks allow half a unit.
+ * Returns the smallest whole number that passes `value + 0.5 >= floor`, which is what messages show.
+ */
+export function lowestPassingWhole(floor: number): number {
+  return Math.ceil(floor - 0.5 - 1e-9);
+}
+
 export function proteinPerKg(goal: Goal): number {
   return goal === 'cut' ? 2.2 : 1.8;
 }
@@ -212,6 +229,9 @@ export function proteinPerKg(goal: Goal): number {
 export function fatFloorGrams(kcal: number, weightKg: number): number {
   return Math.max((kcal * 0.2) / FAT_KCAL, 0.6 * weightKg);
 }
+
+/** Share of kcal that protein may take in default targets (upper bound of the IOM AMDR). */
+export const PROTEIN_MAX_KCAL_SHARE = 0.35;
 
 export function macroEnergy(proteinG: number, carbsG: number, fatG: number): number {
   return proteinG * PROTEIN_KCAL + carbsG * CARB_KCAL + fatG * FAT_KCAL;
@@ -241,7 +261,22 @@ export interface MacroPlan {
   deficitUnavailable: boolean;
   maxSafeOffset: number;
   proteinPerKg: number;
+  /** Effective calorie floor min(F, TDEE) used for this plan. */
+  calorieFloor: number;
+  /** True when default protein was limited to 35% of kcal. */
+  proteinCapped: boolean;
+  /** Protein the g/kg default would have given, before the 35% cap. */
+  proteinUncappedG: number;
+  /** True when fat was trimmed toward its floor so carbs would not go negative. */
+  fatTrimmed: boolean;
+  /** True when protein plus fat still exceed kcal after trimming (carbs clamped to 0). */
+  macroOvershoot: boolean;
+  /** The sex constant Mifflin actually used. */
+  mifflinSex: Sex;
 }
+
+/** For unspecified sex only: which Mifflin constant to use. Undefined/null means the average (−78). */
+export type SexConstantChoice = 'male' | 'female';
 
 export interface PlanInput {
   sex: Sex;
@@ -253,6 +288,13 @@ export interface PlanInput {
   goal: Goal;
   formula?: BmrFormula;
   pregnant?: boolean;
+  /** Used only when sex is unspecified. The calorie floor stays 1,500 either way. */
+  sexConstant?: SexConstantChoice | null;
+}
+
+/** The sex whose Mifflin constant is applied: the chosen one for unspecified sex, else the sex itself. */
+export function mifflinSexFor(sex: Sex, sexConstant?: SexConstantChoice | null): Sex {
+  return sex === 'unspecified' && sexConstant ? sexConstant : sex;
 }
 
 export function resolveFormula(input: PlanInput): BmrFormula {
@@ -264,18 +306,24 @@ export function resolveFormula(input: PlanInput): BmrFormula {
 export function buildMacroPlan(input: PlanInput): MacroPlan {
   const formula = resolveFormula(input);
   const bmi = bmiMetric(input.weightKg, input.heightCm) ?? 0;
-  let bmr = bmrMifflin(input.weightKg, input.heightCm, input.age, input.sex);
-  let formulaNote = input.sex === 'unspecified'
-    ? 'Mifflin–St Jeor with the average sex constant (−78), because sex was left unspecified.'
-    : 'Mifflin–St Jeor.';
+  const mifflinSex = mifflinSexFor(input.sex, input.sexConstant);
+  let bmr = bmrMifflin(input.weightKg, input.heightCm, input.age, mifflinSex);
+  let formulaNote = 'Mifflin–St Jeor.';
+  if (input.sex === 'unspecified') {
+    formulaNote = mifflinSex === 'male'
+      ? 'Mifflin–St Jeor with the male constant (+5), which you chose because sex was left unspecified.'
+      : mifflinSex === 'female'
+        ? 'Mifflin–St Jeor with the female constant (−161), which you chose because sex was left unspecified.'
+        : 'Mifflin–St Jeor with an average constant (−78), because sex was left unspecified. You can pick the male or female constant instead.';
+  }
   if (formula === 'katch' && input.bodyFatPct != null) {
     const lean = leanMassKg(input.weightKg, input.bodyFatPct);
     bmr = katchMcArdle(lean);
     formulaNote = 'Katch–McArdle, because body fat is entered. Lean or muscular people are often closer to this estimate.';
   }
   const tdee = tdeeFromBmr(bmr, input.activity);
-  const floor = calorieFloor(input.sex, bmr);
-  const projectionSex: ProjectionSex = input.sex;
+  const floor = effectiveCalorieFloor(input.sex, bmr, tdee);
+  const projectionSex: ProjectionSex = mifflinSex;
   const maxOffset = maxSafeOffset(input.weightKg, input.heightCm, tdee, bmr, projectionSex, floor);
   const deficitUnavailable = maxOffset < 100;
 
@@ -307,14 +355,30 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
   }
 
   const kcal = roundHalfUp(kcalExact, 0);
-  const proteinExact = input.weightKg * proteinPerKg(effectiveGoal);
+  const proteinUncapped = input.weightKg * proteinPerKg(effectiveGoal);
+  const proteinCap = (kcalExact * PROTEIN_MAX_KCAL_SHARE) / PROTEIN_KCAL;
+  const proteinCapped = proteinUncapped > proteinCap + 1e-9;
+  const proteinExact = Math.min(proteinUncapped, proteinCap);
   const proteinG = roundHalfUp(proteinExact, 0);
-  let fatExact = (kcalExact * 0.25) / FAT_KCAL;
-  if (effectiveGoal === 'cut') fatExact = Math.max(fatExact, 0.8 * input.weightKg);
+
   const fatFloorExact = fatFloorGrams(kcalExact, input.weightKg);
-  fatExact = Math.max(fatExact, fatFloorExact);
+  let fatExact = effectiveGoal === 'cut'
+    ? Math.max(0.8 * input.weightKg, (0.2 * kcalExact) / FAT_KCAL)
+    : Math.max((0.25 * kcalExact) / FAT_KCAL, 0.6 * input.weightKg, (0.2 * kcalExact) / FAT_KCAL);
+  let fatTrimmed = false;
+  let carbExact = (kcalExact - proteinExact * PROTEIN_KCAL - fatExact * FAT_KCAL) / CARB_KCAL;
+  if (carbExact < 0) {
+    // Trim fat toward its floor first, only as far as needed.
+    const fatNeeded = Math.max(fatFloorExact, (kcalExact - proteinExact * PROTEIN_KCAL) / FAT_KCAL);
+    if (fatNeeded < fatExact) {
+      fatExact = fatNeeded;
+      fatTrimmed = true;
+    }
+    carbExact = (kcalExact - proteinExact * PROTEIN_KCAL - fatExact * FAT_KCAL) / CARB_KCAL;
+  }
+  const macroOvershoot = carbExact < -1e-9;
+  carbExact = Math.max(0, carbExact);
   const fatG = roundHalfUp(fatExact, 0);
-  const carbExact = (kcalExact - proteinExact * PROTEIN_KCAL - fatExact * FAT_KCAL) / CARB_KCAL;
   const carbsG = roundHalfUp(carbExact, 0);
   const fiberG = roundHalfUp((14 * kcal) / 1000, 0);
   const macroKcal = macroEnergy(proteinG, carbsG, fatG);
@@ -343,6 +407,12 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
     deficitUnavailable,
     maxSafeOffset: maxOffset,
     proteinPerKg: proteinPerKg(effectiveGoal),
+    calorieFloor: floor,
+    proteinCapped,
+    proteinUncappedG: roundHalfUp(proteinUncapped, 0),
+    fatTrimmed,
+    macroOvershoot,
+    mifflinSex,
   };
 }
 
@@ -364,20 +434,23 @@ export function assessTargets(
   sex: Sex,
   bmr: number,
   weightKg: number,
+  tdee?: number | null,
+  goal?: Goal,
 ): { issues: TargetIssue[]; blocking: boolean } {
   const issues: TargetIssue[] = [];
-  const floor = calorieFloor(sex, bmr);
+  const floor = effectiveCalorieFloor(sex, bmr, tdee);
+  const floorShown = lowestPassingWhole(floor);
   if (draft.kcal == null) {
     issues.push({ field: 'kcal', blocking: true, message: 'Enter a calorie target.' });
   } else if (draft.kcal <= 0) {
     issues.push({ field: 'kcal', blocking: true, message: 'Calorie target has to be above 0.' });
   } else if (draft.kcal > 10000) {
     issues.push({ field: 'kcal', blocking: true, message: 'That target is above 10,000 kcal. Enter a smaller number.' });
-  } else if (draft.kcal < floor) {
+  } else if (draft.kcal + 0.5 < floor) {
     issues.push({
       field: 'kcal',
       blocking: true,
-      message: `That is below the ${floor} kcal floor for this profile. ${floor} kcal is the lowest target Macroyo will save.`,
+      message: `That is below the ${floorShown} kcal floor for this profile. ${floorShown} kcal is the lowest target Macroyo will save.`,
     });
   }
 
@@ -395,11 +468,24 @@ export function assessTargets(
 
   if (draft.kcal != null && draft.kcal > 0 && draft.fatG != null && draft.fatG >= 0 && weightKg > 0) {
     const floorG = fatFloorGrams(draft.kcal, weightKg);
-    if (draft.fatG + 1e-9 < floorG) {
+    if (draft.fatG + 0.5 < floorG) {
       issues.push({
         field: 'fatG',
         blocking: true,
-        message: `Fat is below the floor of ${roundHalfUp(floorG, 0)} g (the larger of 20% of calories and 0.6 g/kg).`,
+        message: `Fat is below the floor of ${lowestPassingWhole(floorG)} g (the larger of 20% of calories and 0.6 g/kg).`,
+      });
+    }
+  }
+
+  // On a cut the default fat is 0.8 g/kg. Going lower is allowed down to the hard floor, with a warning.
+  if (goal === 'cut' && weightKg > 0 && draft.fatG != null && draft.fatG >= 0 && draft.kcal != null && draft.kcal > 0) {
+    const floorG = fatFloorGrams(draft.kcal, weightKg);
+    const cutDefault = 0.8 * weightKg;
+    if (draft.fatG + 0.5 >= floorG && draft.fatG + 0.5 < cutDefault) {
+      issues.push({
+        field: 'fatG',
+        blocking: false,
+        message: `Fat is below the ${Math.ceil(cutDefault - 0.5)} g (0.8 g/kg) Macroyo suggests on a cut. This is a warning, not a block.`,
       });
     }
   }
@@ -603,10 +689,10 @@ export function projectionForOffset(input: PlanInput, offsetKcal: number) {
     weight_kg: input.weightKg,
     height_cm: input.heightCm,
     age: input.age,
-    sex: input.sex,
+    sex: plan.mifflinSex,
     activity_factor: activityFactor(input.activity),
     daily_offset_kcal: offsetKcal,
     tdee_override_kcal: plan.tdee,
-    floor_kcal: calorieFloor(input.sex, plan.bmr),
+    floor_kcal: plan.calorieFloor,
   });
 }

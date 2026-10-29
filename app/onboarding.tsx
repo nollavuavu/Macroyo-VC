@@ -18,7 +18,9 @@ import {
   type BmrFormula,
   type Goal,
   type Sex,
+  type SexConstantChoice,
 } from '@/src/lib/domain';
+import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
 import { formatKcal } from '@/src/lib/format';
 import type { Profile } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
@@ -42,6 +44,7 @@ export default function OnboardingScreen() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [pregnant, setPregnant] = useState(false);
   const [formulaChoice, setFormulaChoice] = useState<BmrFormula | null>(null);
+  const [sexConstant, setSexConstant] = useState<SexConstantChoice | null>(null);
   const [kcalText, setKcalText] = useState('');
   const [proteinText, setProteinText] = useState('');
   const [carbText, setCarbText] = useState('');
@@ -72,8 +75,9 @@ export default function OnboardingScreen() {
       goal: goal ?? 'maintain',
       formula: formulaChoice ?? undefined,
       pregnant,
+      sexConstant,
     });
-  }, [activity, age, ageCheck.ok, bodyFat, fatCheck.ok, formulaChoice, goal, heightCheck.ok, heightCm, pregnant, sex, weightCheck.ok, weightKg]);
+  }, [activity, age, ageCheck.ok, bodyFat, fatCheck.ok, formulaChoice, goal, heightCheck.ok, heightCm, pregnant, sex, sexConstant, weightCheck.ok, weightKg]);
 
   if (!ready) return null;
   if (data.profile?.onboardingComplete) return <Redirect href="/(tabs)" />;
@@ -95,7 +99,6 @@ export default function OnboardingScreen() {
       setCarbText(String(plan.carbsG));
       setFatTargetText(String(plan.fatG));
       setTargetsEdited(false);
-      if (bodyFat != null) setFormulaChoice(plan.formula);
     }
     setStep((value) => Math.min(value + 1, STEPS.length - 1));
   }
@@ -108,8 +111,16 @@ export default function OnboardingScreen() {
       carbsG: parseDecimal(carbText),
       fatG: parseDecimal(fatTargetText),
     };
-    const review = assessTargets(draft, sex, plan.bmr, weightKg);
-    if (targetsEdited && review.blocking) {
+    // Generated targets go through the same check as typed ones, so an invalid plan can never be saved silently.
+    const review = assessTargets(
+      targetsEdited ? draft : { kcal: plan.kcal, proteinG: plan.proteinG, carbsG: plan.carbsG, fatG: plan.fatG },
+      sex,
+      plan.bmr,
+      weightKg,
+      plan.tdee,
+      plan.goal,
+    );
+    if (review.blocking) {
       setShowErrors(true);
       return;
     }
@@ -128,6 +139,8 @@ export default function OnboardingScreen() {
       appearance: 'system',
       pregnant,
       formula: plan.formula,
+      formulaOverride: formulaChoice,
+      sexConstant: sex === 'unspecified' ? sexConstant : null,
       targets,
       onboardingComplete: true,
     };
@@ -164,7 +177,7 @@ export default function OnboardingScreen() {
             ))}
           </View>
           {showErrors && !sex ? <AppText variant="caption" color={theme.colors.warningText}>Choose a sex option. Unspecified uses an average equation.</AppText> : null}
-          {sex === 'unspecified' ? <AppText variant="caption" color={theme.colors.textSecondary}>Mifflin–St Jeor will use the average constant (−78). The calorie floor uses 1,500 kcal.</AppText> : null}
+          <SexConstantPicker sex={sex} value={sexConstant} onChange={setSexConstant} />
           <Field label="Age" value={ageText} onChangeText={setAgeText} keyboard="number" error={showErrors ? ageCheck.message : null} suffix="years" />
           {ageCheck.underage ? (
             <Card>
@@ -241,21 +254,11 @@ export default function OnboardingScreen() {
         <View style={{ gap: theme.spacing.md }}>
           <AppText variant="title">Your plan</AppText>
           <Card>
-            <AppText variant="secondary" color={theme.colors.textSecondary}>{plan.formulaNote}</AppText>
+            <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={(value) => { setFormulaChoice(value); setTargetsEdited(false); }} />
             <AppText variant="metricNumber" style={{ marginTop: 8 }}>{formatKcal(plan.tdee)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>Maintenance kcal, from BMR {formatKcal(plan.bmr)}</AppText>
             {plan.capped && plan.capReason ? <AppText variant="caption" color={theme.colors.warningText} style={{ marginTop: 8 }}>{plan.capReason}</AppText> : null}
           </Card>
-          {bodyFat != null ? (
-            <Segmented
-              value={formulaChoice ?? plan.formula}
-              onChange={(value) => {
-                setFormulaChoice(value);
-                setTargetsEdited(false);
-              }}
-              options={[{ value: 'katch', label: 'Katch–McArdle' }, { value: 'mifflin', label: 'Mifflin–St Jeor' }]}
-            />
-          ) : null}
           <Field label="Calories" value={targetsEdited ? kcalText : String(plan.kcal)} onChangeText={(value) => { setTargetsEdited(true); setKcalText(value); }} suffix="kcal" error={targetError('kcal')} />
           <Field label="Protein" value={targetsEdited ? proteinText : String(plan.proteinG)} onChangeText={(value) => { setTargetsEdited(true); setProteinText(value); }} suffix="g" error={targetError('proteinG')} />
           <Field label="Carbs" value={targetsEdited ? carbText : String(plan.carbsG)} onChangeText={(value) => { setTargetsEdited(true); setCarbText(value); }} suffix="g" error={targetError('carbsG')} />
@@ -263,7 +266,20 @@ export default function OnboardingScreen() {
           <AppText variant="caption" color={theme.colors.textSecondary}>
             Suggested split is about {plan.proteinG} g protein ({plan.proteinPerKg} g/kg), {plan.fatG} g fat, {plan.carbsG} g carbs. Fiber is a soft goal of {plan.fiberG} g. Macros at those grams are {plan.macroKcal} kcal.
           </AppText>
-          {plan.lowCarb ? <AppText variant="caption" color={theme.colors.warningText}>Carbs are under 100 g. That is a warning, not a block.</AppText> : null}
+          {plan.proteinCapped && !targetsEdited ? (
+            <AppText variant="caption" color={theme.colors.textSecondary}>
+              Protein was limited to 35% of calories ({plan.proteinG} g instead of {plan.proteinUncappedG} g from {plan.proteinPerKg} g/kg), because that body weight over-counts protein on a lower target.
+            </AppText>
+          ) : null}
+          {plan.fatTrimmed && !targetsEdited ? (
+            <AppText variant="caption" color={theme.colors.textSecondary}>Fat was lowered toward its minimum so carbs would not go below zero.</AppText>
+          ) : null}
+          {plan.macroOvershoot && !targetsEdited ? (
+            <AppText variant="caption" color={theme.colors.warningText}>Protein and fat already add up to {plan.macroKcal} kcal, a little above the {plan.kcal} kcal target.</AppText>
+          ) : null}
+          {plan.veryLowCarb && !targetsEdited ? (
+            <AppText variant="caption" color={theme.colors.warningText}>Carbs are under 50 g. That is very low for most people. Consider raising calories or lowering fat or protein. This is a warning, not a block.</AppText>
+          ) : null}
           <Disclaimer />
         </View>
       ) : null}
@@ -292,6 +308,7 @@ export default function OnboardingScreen() {
       goal: 'cut' as const,
       formula: formulaChoice ?? undefined,
       pregnant,
+      sexConstant,
     };
   }
 
@@ -302,7 +319,7 @@ export default function OnboardingScreen() {
       proteinG: parseDecimal(proteinText),
       carbsG: parseDecimal(carbText),
       fatG: parseDecimal(fatTargetText),
-    }, sex, plan.bmr, weightKg);
+    }, sex, plan.bmr, weightKg, plan.tdee, plan.goal);
     return review.issues.find((issue) => issue.field === field)?.message ?? null;
   }
 }
