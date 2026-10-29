@@ -74,3 +74,8 @@ export interface AppData {
 }
 
 export const EMPTY_DATA: AppData = { profile: null, logs: [], bodyStats: [] };
+
+/** A new empty AppData whose arrays are not shared with EMPTY_DATA or with any other caller. */
+export function freshEmptyData(): AppData {
+  return { profile: null, logs: [], bodyStats: [] };
+}

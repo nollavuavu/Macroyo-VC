@@ -865,6 +865,17 @@ const TYPED_RANGE = {
  * Calc ranges match its sliders: 120-230 cm, 30-250 kg, 18-120 years.
  * `value` is in cm / kg / years.
  */
+/**
+ * The accepted range for a typed measure, in the units it is typed in. Imperial bounds are whole inches or pounds
+ * rounded inward from the metric limits, so every accepted value is also inside the metric limits.
+ */
+export function typedMeasureRange(kind: TypedMeasureKind, units: 'metric' | 'imperial'): { lo: number; hi: number } {
+  const range = TYPED_RANGE[kind];
+  if (units !== 'imperial' || kind === 'age') return { lo: range.min, hi: range.max };
+  const perUnit = kind === 'height' ? CM_PER_IN : KG_PER_LB;
+  return { lo: Math.ceil(range.min / perUnit - 1e-9), hi: Math.floor(range.max / perUnit + 1e-9) };
+}
+
 export function validateTypedMeasure(
   kind: TypedMeasureKind,
   raw: string,
@@ -872,8 +883,7 @@ export function validateTypedMeasure(
 ): { ok: boolean; value: number | null; message: Msg | null } {
   const range = TYPED_RANGE[kind];
   const imperial = units === 'imperial' && kind !== 'age';
-  const lo = imperial ? (kind === 'height' ? Math.ceil(range.min / CM_PER_IN) : Math.ceil(range.min / KG_PER_LB)) : range.min;
-  const hi = imperial ? (kind === 'height' ? Math.floor(range.max / CM_PER_IN) : Math.floor(range.max / KG_PER_LB)) : range.max;
+  const { lo, hi } = typedMeasureRange(kind, units);
   const rangeKey: MessageKey = kind === 'age'
     ? 'validate.typed.range.age'
     : kind === 'height'
@@ -889,8 +899,10 @@ export function validateTypedMeasure(
         : rangeText;
     return { ok: false, value: null, message };
   }
+  // The check uses the same lo/hi as the message, in the units the person typed, so what is accepted is exactly
+  // what the message says (47.5 in used to be accepted under "48 to 90 in").
+  if (!(parsed >= lo - 1e-9 && parsed <= hi + 1e-9)) return { ok: false, value: null, message: rangeText };
   const value = imperial ? (kind === 'height' ? parsed * CM_PER_IN : parsed * KG_PER_LB) : parsed;
-  if (!(value >= range.min - 1e-9 && value <= range.max + 1e-9)) return { ok: false, value: null, message: rangeText };
   return { ok: true, value, message: null };
 }
 
@@ -911,4 +923,11 @@ export function projectionForOffset(input: PlanInput, offsetKcal: number) {
     tdee_override_kcal: plan.tdee,
     floor_kcal: plan.calorieFloor,
   });
+}
+
+/** The error map without one field's error. Editing a field withdraws that field's error (the others stay). */
+export function withoutFieldError<T extends string>(errors: Partial<Record<T, Msg>>, field: T): Partial<Record<T, Msg>> {
+  if (!(field in errors)) return errors;
+  const { [field]: _removed, ...rest } = errors;
+  return rest as Partial<Record<T, Msg>>;
 }

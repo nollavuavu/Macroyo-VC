@@ -44,6 +44,8 @@ export {
   cmToFeetInches,
   cmToInches,
   explainCutBlock,
+  withoutFieldError,
+  typedMeasureRange,
   fatFloorGrams,
   feetInchesToCm,
   ffmiValue,

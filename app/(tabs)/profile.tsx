@@ -31,12 +31,13 @@ import { msg } from '@/src/i18n/msg';
 import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
+import { eraseThenLeave } from '@/src/lib/reset';
 import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningNotice } from '@/src/components/ui';
 
 export default function ProfileScreen() {
   const theme = useTheme();
   const { t, tm, locale } = useI18n();
-  const { data, updateProfile, resetAll, setLanguage } = useApp();
+  const { data, updateProfile, resetAll, setLanguage, error: storageError } = useApp();
   const profile = data.profile;
   const [confirmReset, setConfirmReset] = useState(false);
   const [notice, setNotice] = useState<Msg | null>(null);
@@ -105,7 +106,8 @@ export default function ProfileScreen() {
         {confirmReset ? (
           <>
             <AppText variant="caption" color={theme.colors.warningText}>{t('profile.eraseWarning')}</AppText>
-            <PrimaryButton label={t('profile.eraseEverything')} onPress={async () => { await resetAll(); router.replace('/onboarding'); }} />
+            {storageError ? <WarningNotice testID="erase-error" variant="caption">{tm(storageError)}</WarningNotice> : null}
+            <PrimaryButton label={t('profile.eraseEverything')} onPress={() => { void eraseThenLeave(resetAll, () => router.replace('/onboarding')); }} testID="erase-everything" />
             <SecondaryButton label={t('common.cancel')} onPress={() => setConfirmReset(false)} />
           </>
         ) : (

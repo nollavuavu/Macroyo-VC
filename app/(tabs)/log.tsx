@@ -6,6 +6,7 @@ import {
   parseDecimal,
   quickAddDecision,
   validatePortionGrams,
+  withoutFieldError,
   type QuickAddField,
 } from '@/src/lib/domain';
 import { MEALS, MEAL_KEY, addDays, friendlyDate, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
@@ -149,6 +150,7 @@ export default function LogScreen() {
     if (!edit) return;
     setEdit({ ...edit, ...editedMacros(), [field]: text, touched: true });
     setEditWarning(null);
+    setEditErrors((current) => withoutFieldError(current, EDIT_FIELD[field]));
   }
 
   async function saveEdit(grams: number, confirmed: boolean) {
@@ -198,6 +200,13 @@ export default function LogScreen() {
     setEditErrors({});
     setEditWarning(null);
   }
+
+  // Editing a field withdraws that field's error right away (the other errors stay until the next Save).
+  const quickInput = (field: QuickAddField, setter: (value: string) => void) => (value: string) => {
+    setter(value);
+    setQuickErrors((current) => withoutFieldError(current, field));
+  };
+  const EDIT_FIELD: Record<'kcal' | 'protein' | 'carbs' | 'fat' | 'fiber', QuickAddField> = { kcal: 'kcal', protein: 'proteinG', carbs: 'carbsG', fat: 'fatG', fiber: 'fiberG' };
 
   async function saveQuick(confirmed = false) {
     const fiberText = quickFiber.trim();
@@ -304,9 +313,9 @@ export default function LogScreen() {
             {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${withUnit(formatAmount(selected.servingSizeG), 'g')})` : ''}
           </AppText>
           {editing && edit ? (
-            <Field label={t('common.name')} value={edit.name} onChangeText={(value) => setEdit({ ...edit, name: value })} error={text(editErrors.name)} keyboard="default" />
+            <Field label={t('common.name')} value={edit.name} onChangeText={(value) => { setEdit({ ...edit, name: value }); setEditErrors((current) => withoutFieldError(current, 'name')); }} error={text(editErrors.name)} keyboard="default" />
           ) : null}
-          <Field label={t('log.grams')} value={gramsText} onChangeText={setGramsText} suffix="g" error={text(formError ?? editErrors.grams)} />
+          <Field label={t('log.grams')} value={gramsText} onChangeText={(value) => { setGramsText(value); setFormError(null); setEditErrors((current) => withoutFieldError(current, 'grams')); }} suffix="g" error={text(formError ?? editErrors.grams)} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
               <Chip label={selected.servingLabel ?? t('log.serving')} detail={withUnit(formatAmount(selected.servingSizeG), 'g')} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
@@ -358,13 +367,13 @@ export default function LogScreen() {
         <View onLayout={(event) => { quickCardY.current = event.nativeEvent.layout.y; }}>
         <Card style={{ gap: theme.spacing.md }}>
           <AppText variant="section">{t('log.quickAdd')}</AppText>
-          <Field label={t('common.name')} value={quickName} onChangeText={setQuickName} error={text(quickErrors.name)} keyboard="default" placeholder={t('log.quickNamePlaceholder')} />
-          <Field label={t('common.calories')} value={quickKcal} onChangeText={setQuickKcal} error={text(quickErrors.kcal)} suffix="kcal" />
-          <Field label={t('macro.protein')} value={quickP} onChangeText={setQuickP} error={text(quickErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" />
-          <Field label={t('macro.carbs')} value={quickC} onChangeText={setQuickC} error={text(quickErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" />
-          <Field label={t('macro.fat')} value={quickF} onChangeText={setQuickF} error={text(quickErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" />
-          <Field label={t('log.fiberBlank')} value={quickFiber} onChangeText={setQuickFiber} error={text(quickErrors.fiberG)} suffix="g" />
-          <Field label={t('log.portion')} value={quickGrams} onChangeText={setQuickGrams} error={text(quickErrors.grams)} suffix="g" />
+          <Field label={t('common.name')} value={quickName} onChangeText={quickInput('name', setQuickName)} error={text(quickErrors.name)} keyboard="default" placeholder={t('log.quickNamePlaceholder')} />
+          <Field label={t('common.calories')} value={quickKcal} onChangeText={quickInput('kcal', setQuickKcal)} error={text(quickErrors.kcal)} suffix="kcal" />
+          <Field label={t('macro.protein')} value={quickP} onChangeText={quickInput('proteinG', setQuickP)} error={text(quickErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" />
+          <Field label={t('macro.carbs')} value={quickC} onChangeText={quickInput('carbsG', setQuickC)} error={text(quickErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" />
+          <Field label={t('macro.fat')} value={quickF} onChangeText={quickInput('fatG', setQuickF)} error={text(quickErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" />
+          <Field label={t('log.fiberBlank')} value={quickFiber} onChangeText={quickInput('fiberG', setQuickFiber)} error={text(quickErrors.fiberG)} suffix="g" />
+          <Field label={t('log.portion')} value={quickGrams} onChangeText={quickInput('grams', setQuickGrams)} error={text(quickErrors.grams)} suffix="g" />
           {formError ? <AppText variant="caption" color={theme.colors.warningText}>{tm(formError)}</AppText> : null}
           {quickWarning ? (
             <WarningNotice testID="quick-warning" onLayout={(event) => revealWarning(quickCardY.current, event)}>
