@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { bmiCategory, bmiTone, quickAddFieldErrors } from './domain';
 import { addDays, dayAccessibilityLabel, friendlyDate, shortDate } from './dates';
-import { formatKcal, groupThousands } from './format';
+import { formatKcal } from './format';
 import { mean, trailingAverage } from './stats';
 import { SEARCH_PAGE_SIZE, loadFoods, parseFoods, searchFoods } from './foods/foods';
 import { DISCLAIMER } from './copy';
 import { borderStrongDark, borderStrongLight } from '../theme/extras';
 import { contrastRatio, darkColors, lightColors } from '../theme/theme';
+import { en } from '../i18n/testing';
 
 describe('formatKcal thousands separators', () => {
   it('groups four-digit and larger values', () => {
@@ -24,10 +25,6 @@ describe('formatKcal thousands separators', () => {
   });
   it('handles negatives', () => {
     expect(formatKcal(-1500)).toBe('−1,500');
-  });
-  it('groupThousands only touches digits', () => {
-    expect(groupThousands('1234567')).toBe('1,234,567');
-    expect(groupThousands('123')).toBe('123');
   });
 });
 
@@ -135,7 +132,7 @@ describe('quick-add field errors', () => {
 
 describe('copy and tokens', () => {
   it('disclaimer says "not medical advice" once', () => {
-    expect(DISCLAIMER.toLowerCase().match(/not medical advice/g)).toHaveLength(1);
+    expect(en(DISCLAIMER).toLowerCase().match(/not medical advice/g)).toHaveLength(1);
   });
   it('strong borders reach 3:1 on surface and background in both schemes', () => {
     expect(contrastRatio(borderStrongLight, lightColors.surface)).toBeGreaterThanOrEqual(3);

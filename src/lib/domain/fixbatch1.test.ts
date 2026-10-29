@@ -17,6 +17,7 @@ import {
 } from './nutrition';
 import { parseCustomOffset } from './offset';
 import { projectV1 } from './projection';
+import { en } from '../../i18n/testing';
 
 const man80: PlanInput = { sex: 'male', age: 30, heightCm: 180, weightKg: 80, bodyFatPct: null, activity: 'moderate', goal: 'cut' };
 
@@ -36,9 +37,9 @@ describe('Fix 1 / R-1: default plans pass their own target check', () => {
 
   it('messages show whole-number floors, never decimals', () => {
     const review = assessTargets({ kcal: 1000, proteinG: 100, carbsG: 100, fatG: 50 }, 'female', 1615.25, 70, 1900);
-    const message = review.issues.find((issue) => issue.field === 'kcal')?.message ?? '';
+    const message = en(review.issues.find((issue) => issue.field === 'kcal')?.message);
     expect(message).not.toMatch(/\d\.\d/);
-    expect(message).toContain('1615 kcal');
+    expect(message).toContain('1,615 kcal');
     expect(lowestPassingWhole(1420.25)).toBe(1420);
     expect(lowestPassingWhole(1420.5)).toBe(1420);
     expect(lowestPassingWhole(1420.51)).toBe(1421);
@@ -239,7 +240,7 @@ describe('Fix 3 / R-3: heavy cuts never get negative carbs', () => {
   it('low-carb warning appears under 50 g and is not a block', () => {
     const review = assessTargets({ kcal: 2000, proteinG: 200, carbsG: 40, fatG: 100 }, 'male', 1700, 80, 2500, 'maintain');
     expect(review.blocking).toBe(false);
-    expect(review.issues.find((issue) => issue.field === 'carbsG')?.message).toMatch(/under 50 g/);
+    expect(en(review.issues.find((issue) => issue.field === 'carbsG')?.message)).toMatch(/under 50 g/);
   });
 
   it('user-typed protein is never capped or altered', () => {
@@ -255,11 +256,11 @@ describe('Fix 5: one resolved formula everywhere', () => {
     const katch = buildMacroPlan(input);
     expect(katch.formula).toBe('katch');
     expect(katch.bmr).toBeCloseTo(1838.8, 6);
-    expect(katch.formulaNote).toMatch(/Katch/);
+    expect(en(katch.formulaNote)).toMatch(/Katch/);
     const mifflin = buildMacroPlan({ ...input, formula: 'mifflin' });
     expect(mifflin.formula).toBe('mifflin');
     expect(mifflin.bmr).toBe(1780);
-    expect(mifflin.formulaNote).toMatch(/Mifflin/);
+    expect(en(mifflin.formulaNote)).toMatch(/Mifflin/);
   });
 
   it('a projection built from the resolved plan matches the plan: same TDEE, target and floor', () => {
@@ -280,8 +281,8 @@ describe('Fix 6: unspecified sex', () => {
   it('defaults to Mifflin −78 with an explanatory note and the 1500 floor', () => {
     const plan = buildMacroPlan(base);
     expect(plan.bmr).toBe(700 + 1062.5 - 150 - 78);
-    expect(plan.formulaNote).toMatch(/average/i);
-    expect(plan.formulaNote).toMatch(/male or female constant/);
+    expect(en(plan.formulaNote)).toMatch(/average/i);
+    expect(en(plan.formulaNote)).toMatch(/male or female constant/);
     expect(plan.mifflinSex).toBe('unspecified');
     const cut = buildMacroPlan({ ...base, activity: 'sedentary', goal: 'cut' });
     expect(cut.calorieFloor).toBeLessThanOrEqual(Math.max(1500, cut.bmr) + 1e-9);
@@ -291,8 +292,8 @@ describe('Fix 6: unspecified sex', () => {
     const female = buildMacroPlan({ ...base, sexConstant: 'female' });
     expect(male.bmr).toBe(700 + 1062.5 - 150 + 5);
     expect(female.bmr).toBe(700 + 1062.5 - 150 - 161);
-    expect(male.formulaNote).toMatch(/male constant \(\+5\)/);
-    expect(female.formulaNote).toMatch(/female constant \(−161\)/);
+    expect(en(male.formulaNote)).toMatch(/male constant \(\+5\)/);
+    expect(en(female.formulaNote)).toMatch(/female constant \(−161\)/);
     expect(mifflinSexFor('unspecified', 'male')).toBe('male');
     expect(mifflinSexFor('female', 'male')).toBe('female');
     const lowTdee = buildMacroPlan({ ...base, weightKg: 45, heightCm: 150, age: 70, sexConstant: 'female', activity: 'sedentary', goal: 'cut' });

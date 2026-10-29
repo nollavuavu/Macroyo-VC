@@ -26,13 +26,15 @@ import { formatHeightCm } from './format';
 import { nextBanner } from './banner';
 import { EMPTY_DATA, type AppData, type LogEntry } from './storage/types';
 import { READ_FAILED_MESSAGE, SAVE_FAILED_MESSAGE, createSerialQueue, insertAt, openStore } from './storage/store';
+import { en } from '../i18n/testing';
+import { msg } from '../i18n/msg';
 
 const GOOD = { name: 'Rice', kcal: 200, proteinG: 4, carbsG: 44, fatG: 0.5, fiberG: null, grams: 150 };
 
 describe('QA-1: one exact deficit-unavailable message', () => {
   const plan = buildMacroPlan({ sex: 'male', age: 60, heightCm: 160, weightKg: 55, bodyFatPct: null, activity: 'sedentary', goal: 'cut' });
   it('is the same text in the plan and the projection warning', () => {
-    expect(DEFICIT_UNAVAILABLE_MESSAGE).toBe(
+    expect(en(DEFICIT_UNAVAILABLE_MESSAGE)).toBe(
       "Your maintenance calories are already close to the minimum safe intake, so a calorie deficit isn't recommended. Consider more activity, or talk to a professional.",
     );
     expect(plan.goalBlockReason).toBe(DEFICIT_UNAVAILABLE_MESSAGE);
@@ -52,7 +54,7 @@ describe('QA-2: typed Calc height, weight and age validate the raw text', () => 
       expect(result.value).toBeNull();
       expect(result.message).toBeTruthy();
     }
-    expect(validateTypedMeasure('height', '250', 'metric').message).toBe('Enter a height from 120 to 230 cm.');
+    expect(en(validateTypedMeasure('height', '250', 'metric').message)).toBe('Enter a height from 120 to 230 cm.');
   });
   it('accepts the Calc range in metric and imperial', () => {
     expect(validateTypedMeasure('height', '180', 'metric')).toEqual({ ok: true, value: 180, message: null });
@@ -72,7 +74,7 @@ describe('QA-2: typed Calc height, weight and age validate the raw text', () => 
     for (const raw of ['0', '17', '121', 'abc', '']) expect(validateTypedMeasure('age', raw, 'imperial').ok, raw).toBe(false);
     expect(validateTypedMeasure('age', '18', 'metric').ok).toBe(true);
     expect(validateTypedMeasure('age', '120', 'metric').ok).toBe(true);
-    expect(validateTypedMeasure('age', '0', 'metric').message).toBe('Enter an age from 18 to 120 years.');
+    expect(en(validateTypedMeasure('age', '0', 'metric').message)).toBe('Enter an age from 18 to 120 years.');
   });
 });
 
@@ -81,13 +83,13 @@ describe('QA-3: quick add bounds', () => {
     expect(MAX_ENTRY_MACRO_G).toBe(2000);
     for (const key of ['proteinG', 'carbsG', 'fatG'] as const) {
       const errors = quickAddFieldErrors({ ...GOOD, grams: 5000, [key]: 2001 });
-      expect(errors[key], key).toMatch(/2,000 g/);
+      expect(en(errors[key]), key).toMatch(/2,000 g/);
       expect(quickAddFieldErrors({ ...GOOD, grams: 5000, [key]: 2000 })[key]).toBeUndefined();
     }
   });
   it('rejects protein + carbs + fat heavier than the portion', () => {
     const errors = quickAddFieldErrors({ ...GOOD, proteinG: 40, carbsG: 40, fatG: 40, grams: 100 });
-    expect(errors.grams).toMatch(/more than the 100 g portion/);
+    expect(en(errors.grams)).toMatch(/more than the 100 g portion/);
     expect(validateQuickAdd({ ...GOOD, proteinG: 40, carbsG: 40, fatG: 40, grams: 100 }).issues.length).toBeGreaterThan(0);
     expect(quickAddFieldErrors({ ...GOOD, proteinG: 40, carbsG: 40, fatG: 20, grams: 100 }).grams).toBeUndefined();
     // rounding slack of 0.5 g
@@ -103,7 +105,7 @@ describe('QA-4: a kcal/macro mismatch keeps the card open with Save anyway', () 
   it('first Save returns a visible warning, not a save', () => {
     const decision = quickAddDecision(mismatch, false);
     expect(decision.action).toBe('confirm');
-    expect(decision.action === 'confirm' && decision.warning).toMatch(/add up to about/);
+    expect(en(decision.action === 'confirm' && decision.warning)).toMatch(/add up to about/);
   });
   it('Save anyway saves; consistent numbers save straight away; errors still block', () => {
     expect(quickAddDecision(mismatch, true).action).toBe('save');
@@ -134,8 +136,8 @@ describe('QA-6: clamped projection wording', () => {
   it('uses "stopped at a healthy minimum BMI" and flags the clamped cells', () => {
     const projection = projectV1({ weight_kg: 54, height_cm: 170, age: 30, sex: 'female', activity_factor: 1.9, daily_offset_kcal: -500 });
     const warning = projection.warnings.find((item) => item.code === 'BMI_FLOOR_REACHED');
-    expect(warning?.message).toMatch(/^Projection stopped at a healthy minimum BMI \(\d+(\.\d)? kg\) from /);
-    expect(warning?.message).not.toMatch(/18\.5/);
+    expect(en(warning?.message)).toMatch(/^Projection stopped at a healthy minimum BMI \(\d+(\.\d)? kg\) from /);
+    expect(en(warning?.message)).not.toMatch(/18\.5/);
     const clampedLabels = projection.horizons.filter((row) => row.clamped).map((row) => row.label);
     expect(clampedLabels.length).toBeGreaterThan(0);
     expect(warning?.horizons).toEqual(clampedLabels);
@@ -260,7 +262,7 @@ describe('INFO: number text and feet/inches', () => {
     expect(parseDecimal('1234')).toBe(1234);
     const weight = validateTypedMeasure('weight', '1,234', 'metric');
     expect(weight.ok).toBe(false);
-    expect(weight.message).toMatch(/thousands separator/);
+    expect(en(weight.message)).toMatch(/thousands separator/);
   });
   it('5 ft 12 in becomes 6 ft 0 in, everywhere inches are shown', () => {
     expect(normalizeFeetInches(5, 12)).toEqual({ feet: 6, inches: 0 });
@@ -277,11 +279,11 @@ describe('UI-1: standalone low-carb warning (spec: under 50 g)', () => {
   it('warns under 50 g, softly under 100 g, never at 100 g or more', () => {
     expect(LOW_CARB_WARNING_G).toBe(50);
     const under50 = targetNotices(draft(49));
-    expect(under50.find((issue) => issue.field === 'carbsG')?.message).toMatch(/under 50 g/);
+    expect(en(under50.find((issue) => issue.field === 'carbsG')?.message)).toMatch(/under 50 g/);
     expect(under50.find((issue) => issue.field === 'carbsG')?.blocking).toBe(false);
     expect(targetNotices(draft(0)).some((issue) => issue.field === 'carbsG')).toBe(true);
-    expect(targetNotices(draft(50)).find((issue) => issue.field === 'carbsG')?.message).toMatch(/under 100 g/);
-    expect(targetNotices(draft(99.9)).find((issue) => issue.field === 'carbsG')?.message).toMatch(/under 100 g/);
+    expect(en(targetNotices(draft(50)).find((issue) => issue.field === 'carbsG')?.message)).toMatch(/under 100 g/);
+    expect(en(targetNotices(draft(99.9)).find((issue) => issue.field === 'carbsG')?.message)).toMatch(/under 100 g/);
     expect(targetNotices(draft(100)).some((issue) => issue.field === 'carbsG')).toBe(false);
   });
   it('is independent of the calorie target, calorie floor and other macros', () => {
@@ -291,10 +293,10 @@ describe('UI-1: standalone low-carb warning (spec: under 50 g)', () => {
   });
   it('assessTargets reports it for saved targets, with and without a blocking floor issue', () => {
     const review = assessTargets({ kcal: 1800, proteinG: 180, carbsG: 40, fatG: 100 }, 'male', 1700, 80, 2200, 'maintain');
-    expect(review.issues.some((issue) => issue.field === 'carbsG' && /under 50 g/.test(issue.message))).toBe(true);
+    expect(review.issues.some((issue) => issue.field === 'carbsG' && /under 50 g/.test(en(issue.message)))).toBe(true);
     const lowFloor = assessTargets({ kcal: 1000, proteinG: 150, carbsG: 20, fatG: 60 }, 'male', 1700, 80, 2200, 'cut');
     expect(lowFloor.blocking).toBe(true);
-    expect(lowFloor.issues.some((issue) => issue.field === 'carbsG' && /under 50 g/.test(issue.message))).toBe(true);
+    expect(lowFloor.issues.some((issue) => issue.field === 'carbsG' && /under 50 g/.test(en(issue.message)))).toBe(true);
   });
   it('appears on generated plans whose carbs are under 50 g', () => {
     const input: PlanInput = { sex: 'female', age: 50, heightCm: 150, weightKg: 130, bodyFatPct: null, activity: 'sedentary', goal: 'cut' };
@@ -350,10 +352,10 @@ describe('UI-3: macro energy vs calorie target', () => {
     const base = { kcal: 2000, proteinG: 150, carbsG: 200, fatG: 66.6 }; // 600 + 800 + 599.4 = 1999.4
     expect(targetNotices(base).some((issue) => issue.field === 'kcal')).toBe(false);
     const over = targetNotices({ ...base, fatG: 80 }).find((issue) => issue.field === 'kcal');
-    expect(over?.message).toMatch(/above the 2000 kcal target/);
+    expect(en(over?.message)).toMatch(/above the 2,000 kcal target/);
     const under = targetNotices({ ...base, carbsG: 150 }).find((issue) => issue.field === 'kcal');
-    expect(under?.message).toMatch(/below the 2000 kcal target/);
-    expect(under?.message).toMatch(/not assigned to any macro/);
+    expect(en(under?.message)).toMatch(/below the 2,000 kcal target/);
+    expect(en(under?.message)).toMatch(/not assigned to any macro/);
     expect(under?.blocking).toBe(false);
   });
   it('the threshold is exactly max(10, 1%) of the target, in both directions', () => {
@@ -380,9 +382,10 @@ describe('UI-3: macro energy vs calorie target', () => {
 
 describe('UI-4: the saved banner only describes the latest save', () => {
   it('clears on the next save attempt and on any edit; a new save sets it', () => {
-    expect(nextBanner(null, { type: 'saved', message: 'Targets saved.' })).toBe('Targets saved.');
-    expect(nextBanner('Targets saved.', { type: 'save-attempt' })).toBeNull();
-    expect(nextBanner('Targets saved.', { type: 'edit' })).toBeNull();
+    const saved = msg('profile.targetsSaved');
+    expect(nextBanner(null, { type: 'saved', message: saved })).toEqual(saved);
+    expect(nextBanner(saved, { type: 'save-attempt' })).toBeNull();
+    expect(nextBanner(saved, { type: 'edit' })).toBeNull();
   });
 });
 

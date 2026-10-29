@@ -28,6 +28,7 @@ import {
   validateWeightKg,
   ffmiValue,
 } from './nutrition';
+import { en } from '../../i18n/testing';
 
 const man = {
   sex: 'male' as const,
@@ -129,7 +130,7 @@ describe('O-2 / O-2c / O-3 / O-5 energy and macros', () => {
     const plan = buildMacroPlan({ ...man, weightKg: 59, goal: 'cut' });
     expect(plan.bmi).toBeCloseTo(18.2, 1);
     expect(plan.goalAllowed).toBe(false);
-    expect(plan.goalBlockReason).toMatch(/18\.5/);
+    expect(en(plan.goalBlockReason)).toMatch(/18\.5/);
   });
 });
 
@@ -209,7 +210,7 @@ describe('G-3 to G-6 target checks', () => {
     expect(assessTargets({ kcal: null, proteinG: 1, carbsG: 1, fatG: 20 }, 'female', 1200, 60).blocking).toBe(true);
     expect(assessTargets({ kcal: 20000, proteinG: 100, carbsG: 100, fatG: 50 }, 'male', 1780, 80).blocking).toBe(true);
     const mismatch = assessTargets({ kcal: 2000, proteinG: 200, carbsG: 250, fatG: 80 }, 'male', 1780, 80);
-    expect(mismatch.issues.some((issue) => /add up/i.test(issue.message))).toBe(true);
+    expect(mismatch.issues.some((issue) => /add up/i.test(en(issue.message)))).toBe(true);
   });
 });
 
@@ -242,19 +243,19 @@ describe('B-1 to B-8 BMI and FFMI', () => {
     expect(leanMassKg(80, 15)).toBeCloseTo(68, 6);
     expect(round1(ffmiValue(68, 180)!)).toBe(21);
     expect(round1(one)).toBe(21);
-    expect(interpretFfmi('male', one).label).toBe('Above average');
+    expect(interpretFfmi('male', one).band).toBe('Above average');
 
     const twoFfmi = ffmiValue(leanMassKg(70, 12), 170)!;
     const two = normalizedFfmi(twoFfmi, 170);
     expect(leanMassKg(70, 12)).toBeCloseTo(61.6, 6);
     expect(round1(twoFfmi)).toBe(21.3);
     expect(round1(two)).toBe(21.9);
-    expect(interpretFfmi('male', two).label).toBe('Above average');
+    expect(interpretFfmi('male', two).band).toBe('Above average');
 
     const boundary = normalizedFfmi(ffmiValue(leanMassKg(70, 20), 170)!, 170);
     expect(round1(ffmiValue(56, 170)!)).toBe(19.4);
     expect(round1(boundary)).toBe(20);
-    expect(interpretFfmi('male', boundary).label).toBe('Above average');
+    expect(interpretFfmi('male', boundary).band).toBe('Above average');
   });
 
   it('B-4b / B-4c women are unbanded and copy avoids natural or enhanced', () => {
@@ -268,7 +269,7 @@ describe('B-1 to B-8 BMI and FFMI', () => {
     expect(reading.band).toBeNull();
     const text = `${reading.label} ${reading.detail}`.toLowerCase();
     expect(text).not.toMatch(/natural|enhanced/);
-    expect(interpretFfmi('male', 26).label.toLowerCase()).not.toMatch(/natural|enhanced/);
+    expect(en(interpretFfmi('male', 26).label).toLowerCase()).not.toMatch(/natural|enhanced/);
   });
 
   it('B-6 / B-7 / B-8 body fat and height guards', () => {
@@ -314,8 +315,8 @@ describe('food math, fiber, and quick add', () => {
   it('L-6 quick add rejects an empty name, negatives, letters, and 50000 kcal; 0 kcal is allowed', () => {
     expect(validateQuickAdd({ name: '', kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: null, grams: 100 }).issues.length).toBeGreaterThan(0);
     expect(validateQuickAdd({ name: 'Water', kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, grams: 250 }).issues).toEqual([]);
-    expect(validateQuickAdd({ name: 'Cake', kcal: 50000, proteinG: 0, carbsG: 0, fatG: 0, fiberG: null, grams: 100 }).issues.join(' ')).toMatch(/10,000/);
-    expect(validateQuickAdd({ name: 'Soup', kcal: -5, proteinG: 1, carbsG: 1, fatG: 1, fiberG: null, grams: 100 }).issues.join(' ')).toMatch(/negative/);
+    expect(validateQuickAdd({ name: 'Cake', kcal: 50000, proteinG: 0, carbsG: 0, fatG: 0, fiberG: null, grams: 100 }).issues.map(en).join(' ')).toMatch(/10,000/);
+    expect(validateQuickAdd({ name: 'Soup', kcal: -5, proteinG: 1, carbsG: 1, fatG: 1, fiberG: null, grams: 100 }).issues.map(en).join(' ')).toMatch(/negative/);
   });
 
   it('L-7 mismatched quick-add macros warn and still have no blocking issue', () => {
