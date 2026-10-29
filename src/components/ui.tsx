@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -12,10 +14,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../state/AppContext';
+import { borderStrong } from '../theme/extras';
 import type { Theme, TypographyKey } from '../theme/theme';
 
-export const DISCLAIMER =
-  'Not medical advice. This app provides general information, not medical advice. Estimates can be off by 10% or more. Consult a qualified professional before changing your diet.';
+export { DISCLAIMER } from '../lib/copy';
+import { DISCLAIMER } from '../lib/copy';
 
 export function AppText({
   variant = 'body',
@@ -46,10 +49,13 @@ export function Screen({
   children,
   scroll = true,
   testID,
+  fabClearance = false,
 }: {
   children: ReactNode;
   scroll?: boolean;
   testID?: string;
+  /** Adds FAB height + 24 of bottom padding so the end of the scroll clears a floating button. */
+  fabClearance?: boolean;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -60,7 +66,7 @@ export function Screen({
       contentContainerStyle={{
         paddingHorizontal: theme.spacing.lg,
         paddingTop: theme.spacing.sm,
-        paddingBottom: insets.bottom + theme.sizes.tabBarHeight + theme.spacing.xxxl,
+        paddingBottom: insets.bottom + theme.sizes.tabBarHeight + (fabClearance ? theme.sizes.fab + theme.spacing.xxl : theme.spacing.xxxl),
         gap: theme.spacing.lg,
       }}
     >
@@ -175,28 +181,32 @@ export function Chip({
   onPress,
   disabled,
   detail,
+  accessibilityLabel,
 }: {
   label: string;
   selected?: boolean;
   onPress?: () => void;
   disabled?: boolean;
   detail?: string;
+  accessibilityLabel?: string;
 }) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? (detail ? `${label}, ${detail}` : label)}
       accessibilityState={{ selected: !!selected, disabled: !!disabled }}
       disabled={disabled || !onPress}
       onPress={onPress}
       style={{
         minHeight: theme.sizes.minTouchTarget,
-        borderRadius: theme.radii.pill,
+        // Chips with a second line use the button radius: two-line pills look like blobs.
+        borderRadius: detail ? theme.radii.button : theme.radii.pill,
         paddingHorizontal: theme.spacing.lg,
         paddingVertical: theme.spacing.sm,
         backgroundColor: selected ? theme.colors.accent : theme.colors.surface,
         borderWidth: 1,
-        borderColor: selected ? theme.colors.accent : theme.colors.border,
+        borderColor: selected ? theme.colors.accent : borderStrong(theme),
         opacity: disabled ? 0.45 : 1,
         justifyContent: 'center',
       }}
@@ -230,9 +240,9 @@ export function Segmented<T extends string>({
         backgroundColor: theme.colors.background,
         borderRadius: theme.radii.pill,
         borderWidth: 1,
-        borderColor: theme.colors.border,
-        padding: 3,
-        gap: 3,
+        borderColor: borderStrong(theme),
+        padding: theme.spacing.xxs,
+        gap: theme.spacing.xxs,
       }}
     >
       {options.map((option) => {
@@ -246,7 +256,7 @@ export function Segmented<T extends string>({
             onPress={() => onChange(option.value)}
             style={{
               flex: 1,
-              minHeight: 40,
+              minHeight: theme.sizes.minTouchTarget,
               borderRadius: theme.radii.pill,
               alignItems: 'center',
               justifyContent: 'center',
@@ -272,6 +282,9 @@ export function Field({
   suffix,
   placeholder,
   keyboard = 'decimal',
+  labelColor,
+  accessibilityLabel,
+  testID,
 }: {
   label: string;
   value: string;
@@ -280,28 +293,42 @@ export function Field({
   suffix?: string;
   placeholder?: string;
   keyboard?: 'decimal' | 'default' | 'number';
+  /** Optional colour dot before the label (macro colour on Quick add). */
+  labelColor?: string;
+  accessibilityLabel?: string;
+  testID?: string;
 }) {
   const theme = useTheme();
+  const [focused, setFocused] = useState(false);
+  const borderWidth = focused ? 2 : 1;
   return (
     <View style={{ gap: theme.spacing.xs }}>
-      <AppText variant="secondary" color={theme.colors.textSecondary}>
-        {label}
-      </AppText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+        {labelColor ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: labelColor }} /> : null}
+        <AppText variant="secondary" color={theme.colors.textSecondary}>
+          {label}
+        </AppText>
+      </View>
       <View
         style={{
           minHeight: theme.sizes.inputHeight,
           borderRadius: theme.radii.button,
-          borderWidth: 1,
-          borderColor: error ? theme.colors.warning : theme.colors.border,
+          borderWidth,
+          borderColor: error ? theme.colors.warning : focused ? theme.colors.primary : borderStrong(theme),
           backgroundColor: theme.colors.surface,
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: theme.spacing.lg,
+          // Keep the text in place when the border grows from 1 to 2.
+          paddingHorizontal: theme.spacing.lg - (borderWidth - 1),
         }}
       >
         <TextInput
+          testID={testID}
+          accessibilityLabel={accessibilityLabel ?? label}
           value={value}
           onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.textSecondary}
           keyboardType={keyboard === 'default' ? 'default' : keyboard === 'number' ? 'number-pad' : 'decimal-pad'}
@@ -309,6 +336,8 @@ export function Field({
           style={[
             theme.typography.body,
             { flex: 1, color: theme.colors.textPrimary, paddingVertical: theme.spacing.md },
+            // The wrapper draws the focus ring; suppress the browser outline on web.
+            Platform.OS === 'web' ? ({ outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle) : null,
           ]}
         />
         {suffix ? (
@@ -323,6 +352,46 @@ export function Field({
         </AppText>
       ) : null}
     </View>
+  );
+}
+
+/** A labelled on/off row with a real Switch and a label that never changes with the value. */
+export function SwitchRow({
+  label,
+  description,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  description?: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, minHeight: theme.sizes.minTouchTarget }}>
+      <View style={{ flex: 1 }}>
+        <AppText variant="bodyMedium">{label}</AppText>
+        {description ? <AppText variant="caption" color={theme.colors.textSecondary}>{description}</AppText> : null}
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: borderStrong(theme), true: theme.colors.primary }}
+        thumbColor={theme.colors.surface}
+      />
+    </View>
+  );
+}
+
+/** Small group heading above a set of chips or fields. */
+export function GroupLabel({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  return (
+    <AppText variant="secondary" color={theme.colors.textSecondary} style={{ marginTop: theme.spacing.xs }}>
+      {children}
+    </AppText>
   );
 }
 

@@ -22,12 +22,12 @@ import {
   type ActivityLevel,
   type Sex,
 } from '@/src/lib/domain';
-import { ACTIVITY_FACTORS } from '@/src/lib/domain';
+import { ACTIVITY_DETAILS, ACTIVITY_FACTORS, bmiTone } from '@/src/lib/domain';
 import { localDateISO, uid } from '@/src/lib/dates';
-import { formatAmount, formatSigned } from '@/src/lib/format';
+import { formatAmount, formatKcal, formatSigned } from '@/src/lib/format';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
-import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, Segmented } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, Segmented } from '@/src/components/ui';
 
 type Mode = 'bmi' | 'ffmi' | 'calories';
 type Direction = 'deficit' | 'surplus';
@@ -182,7 +182,7 @@ export default function CalcScreen() {
       {mode === 'bmi' && bmi != null && bmiClass ? (
         <Card style={{ gap: theme.spacing.sm }}>
           <AppText variant="metricNumber">{roundHalfUp1(bmi).toFixed(1)}</AppText>
-          <AppText variant="section" color={theme.colors.successText}>{bmiClass.label}</AppText>
+          <AppText variant="section" color={bmiTone(bmi) === 'success' ? theme.colors.successText : theme.colors.warningText}>{bmiClass.label}</AppText>
           {bmiClass.detail ? <AppText variant="secondary" color={theme.colors.textSecondary}>{bmiClass.detail}</AppText> : null}
           <AppText variant="caption" color={theme.colors.textSecondary}>BMI does not tell muscle from fat. That is what FFMI is for.</AppText>
         </Card>
@@ -199,6 +199,9 @@ export default function CalcScreen() {
               <AppText variant="secondary" color={theme.colors.textSecondary}>Normalized {roundHalfUp1(nffmi).toFixed(1)}</AppText>
               <AppText variant="section" color={theme.colors.primary}>{ffmiReading.label}</AppText>
               <AppText variant="caption" color={theme.colors.textSecondary}>{ffmiReading.detail}</AppText>
+              {sex !== 'male' ? (
+                <AppText variant="caption" color={theme.colors.textSecondary}>Bands shown are from male reference data.</AppText>
+              ) : null}
               <AppText variant="caption" color={theme.colors.textSecondary}>
                 Lean mass {formatAmount(lean ?? 0)} kg. FFMI = lean ÷ height². Normalized FFMI = FFMI + 6.1 × (1.8 − height in m).
               </AppText>
@@ -211,11 +214,12 @@ export default function CalcScreen() {
         <View style={{ gap: theme.spacing.md }}>
           <Card style={{ gap: theme.spacing.sm }}>
             <AppText variant="secondary" color={theme.colors.textSecondary}>Maintenance</AppText>
-            <AppText variant="metricNumber">{Math.round(projection.tdee_kcal)}</AppText>
+            <AppText variant="metricNumber">{formatKcal(projection.tdee_kcal)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>
-              Estimate · BMR {Math.round(plan.bmr)} kcal
+              Estimate · BMR {formatKcal(plan.bmr)} kcal
             </AppText>
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} />
+            <GroupLabel>Sex</GroupLabel>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {(['female', 'male', 'unspecified'] as Sex[]).map((option) => (
                 <Chip key={option} label={option === 'unspecified' ? 'Unspecified' : option === 'female' ? 'Female' : 'Male'} selected={sex === option} onPress={() => setSex(option)} />
@@ -226,9 +230,16 @@ export default function CalcScreen() {
               const parsed = parseDecimal(value);
               if (parsed != null && parsed >= 18 && parsed <= 120) setAge(parsed);
             }} keyboard="number" />
+            <GroupLabel>Activity level</GroupLabel>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {(Object.keys(ACTIVITY_FACTORS) as ActivityLevel[]).map((level) => (
-                <Chip key={level} label={level} selected={activity === level} onPress={() => setActivity(level)} />
+                <Chip
+                  key={level}
+                  label={ACTIVITY_DETAILS[level].label}
+                  detail={ACTIVITY_DETAILS[level].description}
+                  selected={activity === level}
+                  onPress={() => setActivity(level)}
+                />
               ))}
             </View>
           </Card>
@@ -281,7 +292,7 @@ export default function CalcScreen() {
           ) : null}
           <Card style={{ gap: theme.spacing.sm }}>
             <AppText variant="secondary" color={theme.colors.textSecondary}>Target intake</AppText>
-            <AppText variant="metricNumber">{Math.round(projection.target_kcal)}</AppText>
+            <AppText variant="metricNumber">{formatKcal(projection.target_kcal)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>
               Effective offset {formatSigned(projection.effective_offset_kcal, 0)} kcal/day · {formatAmount(projection.pct_bw_per_week)}% of body weight per week. Every number is an estimate.
             </AppText>

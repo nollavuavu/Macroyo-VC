@@ -16,21 +16,27 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
   const dash = target > 0 ? Math.min(1, Math.max(0, ratio)) * circumference : 0;
   const remaining = target - consumed;
   return (
-    <View style={{ alignItems: 'center', gap: theme.spacing.sm }}>
+    <View
+      style={{ alignItems: 'center', gap: theme.spacing.sm }}
+      accessible
+      accessibilityLabel={target > 0 ? `${formatKcal(consumed)} of ${formatKcal(target)} kilocalories` : `${formatKcal(consumed)} kilocalories, no target set`}
+    >
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ transform: [{ rotate: '-90deg' }] }}>
           <Svg width={size} height={size}>
             <Circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.colors.border} strokeWidth={stroke} fill="none" />
-            <Circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke={color}
-              strokeWidth={stroke}
-              fill="none"
-              strokeDasharray={`${dash} ${circumference}`}
-              strokeLinecap="round"
-            />
+            {dash > 0 ? (
+              <Circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke={color}
+                strokeWidth={stroke}
+                fill="none"
+                strokeDasharray={`${dash} ${circumference}`}
+                strokeLinecap="round"
+              />
+            ) : null}
           </Svg>
         </View>
         <View style={{ position: 'absolute', alignItems: 'center' }}>

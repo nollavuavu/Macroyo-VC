@@ -8,10 +8,19 @@ export function formatAmount(value: number, digits = 1): string {
   return rounded.toFixed(digits);
 }
 
+/** Adds thousands separators ("2,850") without relying on Intl, which varies by engine. */
+export function groupThousands(integerText: string): string {
+  return integerText.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 export function formatKcal(value: number): string {
   if (!Number.isFinite(value)) return '—';
-  const rounded = roundHalfUp(value, value >= 100 ? 0 : 1);
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const negative = value < 0;
+  const abs = Math.abs(value);
+  const rounded = roundHalfUp(abs, abs >= 100 ? 0 : 1);
+  const [whole, fraction] = (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)).split('.');
+  const body = groupThousands(whole) + (fraction ? `.${fraction}` : '');
+  return negative && rounded !== 0 ? `−${body}` : body;
 }
 
 export function formatSigned(value: number, digits = 1): string {

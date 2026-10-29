@@ -152,7 +152,10 @@ export function matchRank(query: string, name: string): number | null {
   return 2;
 }
 
-export function searchFoods(foods: readonly Food[], query: string, limit = 40): Food[] {
+export const SEARCH_PAGE_SIZE = 25;
+
+/** Ranked results for a query, capped at `limit` (default one page). */
+export function searchFoods(foods: readonly Food[], query: string, limit = SEARCH_PAGE_SIZE): Food[] {
   const trimmed = query.trim();
   if (!trimmed) return [];
   const hits: { food: Food; rank: number }[] = [];
@@ -161,8 +164,15 @@ export function searchFoods(foods: readonly Food[], query: string, limit = 40): 
     if (rank == null) continue;
     hits.push({ food, rank });
   }
+  const queryTokens = tokenize(trimmed);
+  /** 0 when every query token is a whole word of the name (so "rice" beats "Ricotta"), else 1. */
+  const wholeWord = (food: Food) => (queryTokens.every((token) => food.tokens.includes(token)) ? 0 : 1);
   hits.sort((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
+    const whole = wholeWord(a.food) - wholeWord(b.food);
+    if (whole !== 0) return whole;
+    // Simple foods first: "Rice, white" before "Rice noodles with chicken and vegetables".
+    if (a.food.tokens.length !== b.food.tokens.length) return a.food.tokens.length - b.food.tokens.length;
     if (a.food.name.length !== b.food.name.length) return a.food.name.length - b.food.name.length;
     return a.food.name.localeCompare(b.food.name);
   });

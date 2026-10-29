@@ -10,6 +10,8 @@ export {
   activityFactor,
   assessTargets,
   bmiCategory,
+  bmiTone,
+  quickAddFieldErrors,
   bmiImperial,
   bmiMetric,
   buildMacroPlan,
@@ -54,7 +56,9 @@ export {
 
 export type {
   ActivityLevel,
+  BmiTone,
   BmrFormula,
+  QuickAddField,
   FieldCheck,
   FoodMacros,
   Goal,

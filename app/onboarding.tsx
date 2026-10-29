@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Image, useWindowDimensions, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import {
   ACTIVITY_DETAILS,
@@ -24,12 +24,13 @@ import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
 import { formatKcal } from '@/src/lib/format';
 import type { Profile } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow } from '@/src/components/ui';
 
 const STEPS = ['Welcome', 'Body', 'Activity', 'Goal', 'Plan'] as const;
 
 export default function OnboardingScreen() {
   const theme = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const { ready, data, saveProfile } = useApp();
   const [step, setStep] = useState(0);
   const [sex, setSex] = useState<Sex | null>(null);
@@ -160,9 +161,15 @@ export default function OnboardingScreen() {
       </View>
 
       {step === 0 ? (
-        <View style={{ gap: theme.spacing.lg }}>
-          <AppText variant="title">Macroyo</AppText>
-          <AppText>Log meals fast. Hit your macros. Know your numbers.</AppText>
+        <View style={{ gap: theme.spacing.lg, minHeight: windowHeight * 0.55, justifyContent: 'center', alignItems: 'center' }}>
+          <Image
+            source={require('../assets/icon.png')}
+            accessibilityIgnoresInvertColors
+            accessibilityLabel="Macroyo logo"
+            style={{ width: 96, height: 96, borderRadius: 22 }}
+          />
+          <AppText variant="title" style={{ textAlign: 'center' }}>Macroyo</AppText>
+          <AppText style={{ textAlign: 'center' }}>Log meals fast. Hit your macros. Know your numbers.</AppText>
           <Disclaimer />
         </View>
       ) : null}
@@ -206,7 +213,7 @@ export default function OnboardingScreen() {
           )}
           <Field label="Weight" value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? weightCheck.message : null} />
           <Field label="Body fat % (optional)" value={fatText} onChangeText={setFatText} suffix="%" placeholder="Skip if you don't know" error={showErrors ? fatCheck.message : null} />
-          <Chip label={pregnant ? 'Pregnant or breastfeeding' : 'Not pregnant or breastfeeding'} selected={pregnant} onPress={() => setPregnant((value) => !value)} />
+          <SwitchRow label="Pregnant or breastfeeding" value={pregnant} onValueChange={setPregnant} />
         </View>
       ) : null}
 
@@ -280,7 +287,6 @@ export default function OnboardingScreen() {
           {plan.veryLowCarb && !targetsEdited ? (
             <AppText variant="caption" color={theme.colors.warningText}>Carbs are under 50 g. That is very low for most people. Consider raising calories or lowering fat or protein. This is a warning, not a block.</AppText>
           ) : null}
-          <Disclaimer />
         </View>
       ) : null}
 
@@ -288,7 +294,7 @@ export default function OnboardingScreen() {
         {step > 0 ? <View style={{ flex: 1 }}><SecondaryButton label="Back" onPress={() => { setShowErrors(false); setStep((value) => value - 1); }} testID="onboarding-back" /></View> : null}
         <View style={{ flex: 1 }}>
           {step < STEPS.length - 1 ? (
-            <PrimaryButton label="Next" onPress={next} disabled={step === 1 && ageCheck.underage} testID="onboarding-next" />
+            <PrimaryButton label={step === 0 ? 'Get started' : 'Next'} onPress={next} disabled={step === 1 && ageCheck.underage} testID="onboarding-next" />
           ) : (
             <PrimaryButton label="Start tracking" onPress={finish} testID="onboarding-finish" />
           )}

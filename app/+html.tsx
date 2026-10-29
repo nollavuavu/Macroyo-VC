@@ -1,5 +1,6 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { ReactNode } from 'react';
+import { darkColors, lightColors } from '@/src/theme/theme';
 
 export default function Root({ children }: { children: ReactNode }) {
   return (
@@ -17,7 +18,7 @@ export default function Root({ children }: { children: ReactNode }) {
 }
 
 const responsiveBackground = `
-body { background-color: #F7F8F5; }
+body { background-color: ${lightColors.background}; }
 @media (prefers-color-scheme: dark) {
-  body { background-color: #0C1210; }
+  body { background-color: ${darkColors.background}; }
 }`;

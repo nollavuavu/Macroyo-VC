@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Drumstick, Droplets, Plus, Wheat } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { borderStrong } from '@/src/theme/extras';
 import { progressRatio, sumLogged } from '@/src/lib/domain';
-import { MEALS, MEAL_LABEL, addDays, formatLongDate, localDateISO, weekDates, type Meal } from '@/src/lib/dates';
+import { MEALS, MEAL_LABEL, addDays, dayAccessibilityLabel, formatLongDate, localDateISO, weekDates, type Meal } from '@/src/lib/dates';
 import { formatAmount, formatKcal } from '@/src/lib/format';
 import { formatFiber } from '@/src/lib/foods/foods';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, PrimaryButton, ProgressTrack, Screen, SecondaryButton } from '@/src/components/ui';
+import { AppText, Card, ProgressTrack, Screen, SecondaryButton } from '@/src/components/ui';
 import { CalorieRing } from '@/src/components/Ring';
 
 const MACRO_ICON = {
@@ -48,7 +49,7 @@ export default function TodayScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Screen testID="screen-today">
+      <Screen testID="screen-today" fabClearance>
         <View>
           <AppText variant="title">Today</AppText>
           <AppText variant="secondary" color={theme.colors.textSecondary}>{formatLongDate(date)}</AppText>
@@ -56,14 +57,22 @@ export default function TodayScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           {week.map((iso) => {
             const selected = iso === date;
-            const hasLogs = data.logs.some((entry) => entry.date === iso);
+            const dayCount = data.logs.filter((entry) => entry.date === iso).length;
+            const hasLogs = dayCount > 0;
             return (
-              <Pressable key={iso} onPress={() => setDate(iso)} accessibilityRole="button" style={{ alignItems: 'center', gap: 4, minWidth: 36 }}>
+              <Pressable
+                key={iso}
+                onPress={() => setDate(iso)}
+                accessibilityRole="button"
+                accessibilityLabel={dayAccessibilityLabel(iso, dayCount)}
+                accessibilityState={{ selected }}
+                style={{ alignItems: 'center', gap: theme.spacing.xs, minWidth: theme.sizes.minTouchTarget, minHeight: theme.sizes.minTouchTarget + 20 }}
+              >
                 <AppText variant="caption" color={theme.colors.textSecondary}>{['M', 'T', 'W', 'T', 'F', 'S', 'S'][week.indexOf(iso)]}</AppText>
                 <View style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
+                  width: theme.sizes.minTouchTarget,
+                  height: theme.sizes.minTouchTarget,
+                  borderRadius: theme.sizes.minTouchTarget / 2,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: selected ? theme.colors.primary : 'transparent',
@@ -91,16 +100,13 @@ export default function TodayScreen() {
             const text = theme.macroTextColors[key];
             const ratio = progressRatio(consumed, target);
             return (
-              <View key={key} style={{ gap: 6 }}>
+              <View key={key} style={{ gap: theme.spacing.xs }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Icon color={fill} size={18} strokeWidth={2} />
                   <AppText variant="bodyMedium" style={{ flex: 1, textTransform: 'capitalize' }}>{key}</AppText>
-                  <AppText variant="macroGrams" color={text}>{formatAmount(consumed)} / {formatAmount(target)} g</AppText>
+                  <AppText variant="macroGrams" color={text}>{formatAmount(consumed, 0)} / {formatAmount(target, 0)} g{target > 0 ? ` · ${Math.round(ratio * 100)}%` : ''}</AppText>
                 </View>
                 <ProgressTrack ratio={ratio} color={fill} />
-                <AppText variant="caption" color={theme.colors.textSecondary}>
-                  {target > 0 ? `${Math.round(ratio * 100)}%` : '—'}
-                </AppText>
               </View>
             );
           })}
@@ -110,12 +116,17 @@ export default function TodayScreen() {
         </Card>
 
         {entries.length === 0 ? (
-          <Card style={{ gap: theme.spacing.md }}>
+          <Card style={{ gap: theme.spacing.md, alignItems: 'center' }}>
+            <Image
+              source={require('../../assets/icon-small.png')}
+              accessibilityIgnoresInvertColors
+              style={{ width: 64, height: 64, borderRadius: 16, opacity: 0.9 }}
+            />
             <AppText variant="section">Nothing logged yet</AppText>
-            <AppText variant="secondary" color={theme.colors.textSecondary}>
-              Add a meal and it will show up here, grouped by breakfast, lunch, dinner, and snack.
+            <AppText variant="secondary" color={theme.colors.textSecondary} style={{ textAlign: 'center' }}>
+              Log your first meal and it will show up here, grouped by breakfast, lunch, dinner, and snack.
             </AppText>
-            <PrimaryButton label="Log a meal" onPress={() => router.push({ pathname: '/log', params: { date } })} />
+            <SecondaryButton label="Log a meal" onPress={() => router.push({ pathname: '/log', params: { date } })} />
             {data.logs.some((entry) => entry.date === addDays(date, -1)) ? (
               <SecondaryButton label="Copy yesterday" onPress={copyYesterday} />
             ) : null}
@@ -126,14 +137,14 @@ export default function TodayScreen() {
             const subtotal = items.reduce((sum, item) => sum + item.kcal, 0);
             return (
               <Card key={meal} style={{ gap: theme.spacing.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.sizes.minTouchTarget }}>
                   <View style={{ flex: 1 }}>
                     <AppText variant="section">{MEAL_LABEL[meal]}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>{formatKcal(subtotal)} kcal</AppText>
                   </View>
                 </View>
                 {items.map((item) => (
-                  <View key={item.id} style={{ paddingVertical: 6, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                  <View key={item.id} style={{ paddingVertical: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
                     <AppText>{item.name}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>
                       {formatAmount(item.grams)} g · {formatKcal(item.kcal)} kcal · P {formatAmount(item.proteinG)} · C {formatAmount(item.carbsG)} · F {formatAmount(item.fatG)} · fiber {formatFiber(item.fiberG)}
@@ -144,9 +155,20 @@ export default function TodayScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Add to ${MEAL_LABEL[meal]}`}
                   onPress={() => router.push({ pathname: '/log', params: { meal, date } })}
-                  style={{ alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 16, borderRadius: theme.radii.pill, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' }}
+                  style={{
+                    position: 'absolute',
+                    top: theme.spacing.md,
+                    right: theme.spacing.md,
+                    width: theme.sizes.minTouchTarget,
+                    height: theme.sizes.minTouchTarget,
+                    borderRadius: theme.sizes.minTouchTarget / 2,
+                    borderWidth: 1,
+                    borderColor: borderStrong(theme),
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                 >
-                  <AppText variant="bodyMedium" color={theme.colors.onAccent}>Add</AppText>
+                  <Plus color={theme.colors.primary} size={20} strokeWidth={2.4} />
                 </Pressable>
               </Card>
             );

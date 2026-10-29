@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Plus, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import {
   parseDecimal,
+  quickAddFieldErrors,
   validatePortionGrams,
   validateQuickAdd,
+  type QuickAddField,
 } from '@/src/lib/domain';
-import { MEALS, MEAL_LABEL, addDays, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
+import { MEALS, MEAL_LABEL, addDays, friendlyDate, localDateISO, mealForHour, type Meal } from '@/src/lib/dates';
 import { formatAmount, formatKcal } from '@/src/lib/format';
 import { entryFromPer100 } from '@/src/lib/logging';
-import { formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
+import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
 import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
+import { MacroTokens } from '@/src/components/MacroTokens';
+import { borderStrong } from '@/src/theme/extras';
 import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, useDebounced } from '@/src/components/ui';
 
 const foods = loadFoods();
@@ -43,10 +47,14 @@ export default function LogScreen() {
   const [quickFiber, setQuickFiber] = useState('');
   const [quickGrams, setQuickGrams] = useState('100');
   const [formError, setFormError] = useState<string | null>(null);
+  const [quickErrors, setQuickErrors] = useState<Partial<Record<QuickAddField, string>>>({});
+  const [shown, setShown] = useState(SEARCH_PAGE_SIZE);
+  useEffect(() => setShown(SEARCH_PAGE_SIZE), [debounced]);
   const [mismatch, setMismatch] = useState<string | null>(null);
   const [undo, setUndo] = useState<LogEntry | null>(null);
 
-  const results = useMemo(() => searchFoods(foods, debounced, 30), [debounced]);
+  const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
+  const results = allResults.slice(0, shown);
   const dayEntries = data.logs.filter((entry) => entry.date === date && entry.meal === meal);
 
   function openFood(food: Food) {
@@ -115,8 +123,12 @@ export default function LogScreen() {
       fiberG: fiberText === '' ? null : parseDecimal(fiberText),
       grams: parseDecimal(quickGrams),
     };
-    if (fiberText !== '' && input.fiberG == null) {
-      setFormError('Enter fiber as a number, or leave it blank if you do not know it.');
+    const errors = quickAddFieldErrors(input);
+    if (fiberText !== '' && input.fiberG == null) errors.fiberG = 'Enter fiber as a number, or leave it blank if you do not know it.';
+    if (Object.keys(errors).length > 0) {
+      setQuickErrors(errors);
+      setFormError(null);
+      setMismatch(null);
       return;
     }
     const review = validateQuickAdd(input);
@@ -125,6 +137,7 @@ export default function LogScreen() {
       setMismatch(null);
       return;
     }
+    setQuickErrors({});
     setMismatch(review.mismatch);
     const per100 = 100 / input.grams;
     await addLog(entryFromPer100({
@@ -162,6 +175,16 @@ export default function LogScreen() {
       ? scalePreview(editing.kcalPer100, editing.proteinPer100, editing.carbsPer100, editing.fatPer100, editing.fiberPer100, parseDecimal(gramsText))
       : null;
 
+  const dayButtonStyle = {
+    width: theme.sizes.minTouchTarget,
+    height: theme.sizes.minTouchTarget,
+    borderRadius: theme.sizes.minTouchTarget / 2,
+    borderWidth: 1,
+    borderColor: borderStrong(theme),
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  };
+
   return (
     <Screen testID="screen-log">
       <AppText variant="title">Log</AppText>
@@ -171,12 +194,16 @@ export default function LogScreen() {
         ))}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <SecondaryButton label="Previous day" onPress={() => setDate((value) => addDays(value, -1))} />
-        <AppText variant="bodyMedium">{date}</AppText>
-        <SecondaryButton label="Next day" onPress={() => setDate((value) => addDays(value, 1))} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous day" onPress={() => setDate((value) => addDays(value, -1))} style={dayButtonStyle}>
+          <ChevronLeft color={theme.colors.primary} size={22} strokeWidth={2.2} />
+        </Pressable>
+        <AppText variant="bodyMedium">{friendlyDate(date)}</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next day" onPress={() => setDate((value) => addDays(value, 1))} style={dayButtonStyle}>
+          <ChevronRight color={theme.colors.primary} size={22} strokeWidth={2.2} />
+        </Pressable>
       </View>
 
-      <Field label="Search foods" value={query} onChangeText={setQuery} keyboard="default" placeholder="Try baked bacon" />
+      <Field label="Search foods" accessibilityLabel="Search foods" value={query} onChangeText={setQuery} keyboard="default" placeholder="Try baked bacon" />
 
       {selected || editing ? (
         <Card style={{ gap: theme.spacing.md }}>
@@ -188,16 +215,18 @@ export default function LogScreen() {
           <Field label="Grams" value={gramsText} onChangeText={setGramsText} suffix="g" error={formError} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
-              <Chip label={selected.servingLabel ?? 'Serving'} detail={`${formatAmount(selected.servingSizeG)} g`} onPress={() => setGramsText(String(selected.servingSizeG))} />
+              <Chip label={selected.servingLabel ?? 'Serving'} detail={`${formatAmount(selected.servingSizeG)} g`} selected={gramsText === String(selected.servingSizeG)} onPress={() => setGramsText(String(selected.servingSizeG))} />
             ) : null}
             {[50, 100, 150, 200].map((grams) => (
-              <Chip key={grams} label={`${grams} g`} selected={gramsText === String(grams)} onPress={() => setGramsText(String(grams))} />
+              <Chip key={grams} label={`${grams} g`} selected={gramsText === String(grams) && gramsText !== String(selected?.servingSizeG ?? '')} onPress={() => setGramsText(String(grams))} />
             ))}
           </View>
           {preview ? (
-            <AppText variant="secondary" color={theme.colors.textSecondary}>
-              {formatKcal(preview.kcal)} kcal · P {formatAmount(preview.protein)} · C {formatAmount(preview.carbs)} · F {formatAmount(preview.fat)} · fiber {formatFiber(preview.fiber)}
-            </AppText>
+            <View style={{ gap: theme.spacing.xs }}>
+              <AppText variant="bodyMedium">{formatKcal(preview.kcal)} kcal</AppText>
+              <MacroTokens protein={preview.protein} carbs={preview.carbs} fat={preview.fat} />
+              <AppText variant="caption" color={theme.colors.textSecondary}>Fiber {formatFiber(preview.fiber)} g</AppText>
+            </View>
           ) : null}
           <PrimaryButton label={editing ? 'Save changes' : `Add to ${MEAL_LABEL[meal]}`} onPress={savePortion} testID="add-food" />
           <SecondaryButton label="Cancel" onPress={() => { setSelected(null); setEditing(null); setFormError(null); }} />
@@ -208,13 +237,13 @@ export default function LogScreen() {
       {quick ? (
         <Card style={{ gap: theme.spacing.md }}>
           <AppText variant="section">Quick add</AppText>
-          <Field label="Name" value={quickName} onChangeText={setQuickName} keyboard="default" placeholder="Phở bò" />
-          <Field label="Calories" value={quickKcal} onChangeText={setQuickKcal} suffix="kcal" />
-          <Field label="Protein" value={quickP} onChangeText={setQuickP} suffix="g" />
-          <Field label="Carbs" value={quickC} onChangeText={setQuickC} suffix="g" />
-          <Field label="Fat" value={quickF} onChangeText={setQuickF} suffix="g" />
-          <Field label="Fiber (blank if unknown)" value={quickFiber} onChangeText={setQuickFiber} suffix="g" />
-          <Field label="Portion" value={quickGrams} onChangeText={setQuickGrams} suffix="g" />
+          <Field label="Name" value={quickName} onChangeText={setQuickName} error={quickErrors.name} keyboard="default" placeholder="Phở bò" />
+          <Field label="Calories" value={quickKcal} onChangeText={setQuickKcal} error={quickErrors.kcal} suffix="kcal" />
+          <Field label="Protein" value={quickP} onChangeText={setQuickP} error={quickErrors.proteinG} labelColor={theme.macroColors.protein} suffix="g" />
+          <Field label="Carbs" value={quickC} onChangeText={setQuickC} error={quickErrors.carbsG} labelColor={theme.macroColors.carbs} suffix="g" />
+          <Field label="Fat" value={quickF} onChangeText={setQuickF} error={quickErrors.fatG} labelColor={theme.macroColors.fat} suffix="g" />
+          <Field label="Fiber (blank if unknown)" value={quickFiber} onChangeText={setQuickFiber} error={quickErrors.fiberG} suffix="g" />
+          <Field label="Portion" value={quickGrams} onChangeText={setQuickGrams} error={quickErrors.grams} suffix="g" />
           {formError ? <AppText variant="caption" color={theme.colors.warningText}>{formError}</AppText> : null}
           {mismatch ? <AppText variant="caption" color={theme.colors.warningText}>{mismatch}</AppText> : null}
           <PrimaryButton label="Save quick add" onPress={saveQuick} />
@@ -225,7 +254,7 @@ export default function LogScreen() {
         <View style={{ gap: theme.spacing.sm }}>
           {results.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>No foods match that search.</AppText> : null}
           {results.map((food) => (
-            <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" style={{
+            <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" accessibilityLabel={`${food.name}, ${formatKcal(food.kcalPer100g)} kcal per 100 grams. Add`} style={{
               backgroundColor: theme.colors.surface,
               borderRadius: theme.radii.card,
               borderWidth: 1,
@@ -235,7 +264,7 @@ export default function LogScreen() {
               gap: theme.spacing.md,
               alignItems: 'center',
             }}>
-              <View style={{ width: 48, height: 48, borderRadius: theme.radii.thumbnail, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: theme.sizes.thumbnail, height: theme.sizes.thumbnail, borderRadius: theme.radii.thumbnail, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
                 <AppText variant="bodyMedium" color={theme.colors.primary}>{food.name.slice(0, 1)}</AppText>
               </View>
               <View style={{ flex: 1 }}>
@@ -244,9 +273,14 @@ export default function LogScreen() {
                   {formatKcal(food.kcalPer100g)} kcal / 100 g · P {formatAmount(food.proteinPer100g)} · C {formatAmount(food.carbsPer100g)} · F {formatAmount(food.fatPer100g)} · fiber {formatFiber(food.fiberPer100g)}
                 </AppText>
               </View>
-              <Plus color={theme.colors.onAccent} size={18} strokeWidth={2.4} />
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+                <Plus color={theme.colors.onAccent} size={18} strokeWidth={2.4} />
+              </View>
             </Pressable>
           ))}
+          {allResults.length > results.length ? (
+            <SecondaryButton label={`Show more (${allResults.length - results.length} more)`} onPress={() => setShown((value) => value + SEARCH_PAGE_SIZE)} />
+          ) : null}
         </View>
       ) : (
         <AppText variant="secondary" color={theme.colors.textSecondary}>
@@ -254,7 +288,7 @@ export default function LogScreen() {
         </AppText>
       )}
 
-      <AppText variant="section">{MEAL_LABEL[meal]} on {date}</AppText>
+      <AppText variant="section">{MEAL_LABEL[meal]} · {friendlyDate(date)}</AppText>
       {dayEntries.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>Nothing in this meal yet.</AppText> : null}
       {dayEntries.map((entry) => (
         <Card key={entry.id}>

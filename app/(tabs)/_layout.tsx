@@ -21,11 +21,11 @@ export default function TabLayout() {
           borderTopColor: theme.colors.border,
           height: theme.sizes.tabBarHeight + insets.bottom,
           paddingBottom: insets.bottom,
-          paddingTop: 6,
+          paddingTop: theme.spacing.xs + theme.spacing.xxs,
         },
         tabBarLabelStyle: {
           fontFamily: theme.fontFamilies.bodyMedium,
-          fontSize: 11,
+          fontSize: theme.typography.caption.fontSize,
         },
       }}
     >
@@ -34,7 +34,7 @@ export default function TabLayout() {
         options={{
           title: 'Today',
           tabBarButtonTestID: 'tab-today',
-          tabBarIcon: ({ color, focused }) => <House color={color} size={22} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: ({ color, focused }) => <House color={color} size={22} strokeWidth={focused ? 2.6 : 2} fill={focused ? color : 'none'} />,
         }}
       />
       <Tabs.Screen
@@ -66,7 +66,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarButtonTestID: 'tab-profile',
-          tabBarIcon: ({ color, focused }) => <UserRound color={color} size={22} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: ({ color, focused }) => <UserRound color={color} size={22} strokeWidth={focused ? 2.6 : 2} fill={focused ? color : 'none'} />,
         }}
       />
     </Tabs>

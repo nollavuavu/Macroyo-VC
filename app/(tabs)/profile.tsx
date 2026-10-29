@@ -23,7 +23,7 @@ import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
 import { formatAmount } from '@/src/lib/format';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow } from '@/src/components/ui';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -181,7 +181,8 @@ function BodyEditor({
   return (
     <Card style={{ gap: theme.spacing.sm }}>
       <AppText variant="section">Body</AppText>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <GroupLabel>Sex</GroupLabel>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
         {(['female', 'male', 'unspecified'] as Sex[]).map((option) => (
           <Chip key={option} label={option === 'unspecified' ? 'Unspecified' : option === 'female' ? 'Female' : 'Male'} selected={sex === option} onPress={() => setSex(option)} />
         ))}
@@ -199,13 +200,19 @@ function BodyEditor({
       <Field label="Weight" value={weightText} onChangeText={setWeightText} suffix={profile.units === 'metric' ? 'kg' : 'lb'} />
       <Field label="Body fat % (optional)" value={fatText} onChangeText={setFatText} />
       {previewPlan ? <FormulaPicker plan={previewPlan.plan} bodyFatEntered={previewPlan.bodyFat != null} onChange={setFormulaOverride} /> : null}
-      {(Object.keys(ACTIVITY_DETAILS) as ActivityLevel[]).map((level) => (
-        <Chip key={level} label={ACTIVITY_DETAILS[level].label} selected={activity === level} onPress={() => setActivity(level)} />
-      ))}
-      {(Object.keys(GOAL_DETAILS) as Goal[]).map((option) => (
-        <Chip key={option} label={GOAL_DETAILS[option].label} selected={goal === option} onPress={() => setGoal(option)} />
-      ))}
-      <Chip label={pregnant ? 'Pregnant or breastfeeding' : 'Not pregnant or breastfeeding'} selected={pregnant} onPress={() => setPregnant((value) => !value)} />
+      <GroupLabel>Activity level</GroupLabel>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+        {(Object.keys(ACTIVITY_DETAILS) as ActivityLevel[]).map((level) => (
+          <Chip key={level} label={ACTIVITY_DETAILS[level].label} detail={ACTIVITY_DETAILS[level].description} selected={activity === level} onPress={() => setActivity(level)} />
+        ))}
+      </View>
+      <GroupLabel>Goal</GroupLabel>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+        {(Object.keys(GOAL_DETAILS) as Goal[]).map((option) => (
+          <Chip key={option} label={GOAL_DETAILS[option].label} selected={goal === option} onPress={() => setGoal(option)} />
+        ))}
+      </View>
+      <SwitchRow label="Pregnant or breastfeeding" value={pregnant} onValueChange={setPregnant} />
       {error ? <AppText variant="caption" color={theme.colors.warningText}>{error}</AppText> : null}
       <PrimaryButton label={profile.targets.custom ? 'Save body, keep targets' : 'Save and recalculate'} onPress={() => saveBody(false)} />
       {profile.targets.custom ? <SecondaryButton label="Recalculate targets from these stats" onPress={() => saveBody(true)} /> : null}

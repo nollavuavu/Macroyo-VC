@@ -122,6 +122,13 @@ export function bmiCategory(bmi: number): BmiClass {
   return { label: 'Obesity range', detail: 'Obese class III', who: 'Obese class III' };
 }
 
+/** Colour role for BMI text: green only for the normal band, amber otherwise. Never red. */
+export type BmiTone = 'success' | 'warning';
+
+export function bmiTone(bmi: number): BmiTone {
+  return bmiCategory(bmi).who === 'Normal' ? 'success' : 'warning';
+}
+
 export function isUnderweightBmi(bmi: number): boolean {
   return bmi < 18.5;
 }
@@ -676,6 +683,30 @@ export function validateQuickAdd(input: QuickAddInput): { issues: string[]; mism
     }
   }
   return { issues, mismatch };
+}
+
+export type QuickAddField = 'name' | 'kcal' | 'proteinG' | 'carbsG' | 'fatG' | 'fiberG' | 'grams';
+
+/** Same rules as validateQuickAdd, keyed by field so the message can sit under the input it is about. */
+export function quickAddFieldErrors(input: QuickAddInput): Partial<Record<QuickAddField, string>> {
+  const errors: Partial<Record<QuickAddField, string>> = {};
+  if (!input.name.trim()) errors.name = 'Enter a name.';
+  else if (input.name.trim().length > 200) errors.name = 'Use a name of 200 characters or fewer.';
+  if (input.kcal == null) errors.kcal = 'Enter calories as a number.';
+  else if (input.kcal < 0) errors.kcal = 'Calories cannot be negative.';
+  else if (input.kcal > 10000) errors.kcal = 'One entry cannot be over 10,000 kcal.';
+  for (const [field, label, value] of [
+    ['proteinG', 'protein', input.proteinG],
+    ['carbsG', 'carbs', input.carbsG],
+    ['fatG', 'fat', input.fatG],
+  ] as const) {
+    if (value == null) errors[field] = `Enter ${label} as a number, or 0.`;
+    else if (value < 0) errors[field] = `${label.charAt(0).toUpperCase()}${label.slice(1)} cannot be negative.`;
+  }
+  if (input.fiberG != null && input.fiberG < 0) errors.fiberG = 'Fiber cannot be negative.';
+  const grams = validatePortionGrams(input.grams);
+  if (!grams.ok && grams.message) errors.grams = grams.message;
+  return errors;
 }
 
 /** Preview of a cut that the safety rules will not offer. Useful for explanations. */

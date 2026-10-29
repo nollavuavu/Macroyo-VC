@@ -31,6 +31,32 @@ export function weekdayShort(iso: string): string {
   return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][parseLocalDate(iso).getDay()] ?? '';
 }
 
+const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "Today", "Yesterday", "Tomorrow", else "Wed 28 Oct". Deterministic English, no locale. */
+export function friendlyDate(iso: string, today: string = localDateISO()): string {
+  if (iso === today) return 'Today';
+  if (iso === addDays(today, -1)) return 'Yesterday';
+  if (iso === addDays(today, 1)) return 'Tomorrow';
+  const date = parseLocalDate(iso);
+  return `${weekdayShort(iso)} ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+}
+
+/** Short axis label: "28 Oct". */
+export function shortDate(iso: string): string {
+  const date = parseLocalDate(iso);
+  return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`;
+}
+
+/** Screen-reader label for a day cell: "Friday 30 October, 2 meals logged". */
+export function dayAccessibilityLabel(iso: string, entryCount: number): string {
+  const date = parseLocalDate(iso);
+  const base = `${WEEKDAYS_LONG[date.getDay()]} ${date.getDate()} ${MONTHS_LONG[date.getMonth()]}`;
+  return `${base}, ${entryCount === 0 ? 'nothing logged' : `${entryCount} ${entryCount === 1 ? 'item' : 'items'} logged`}`;
+}
+
 export function formatLongDate(iso: string): string {
   return parseLocalDate(iso).toLocaleDateString(undefined, {
     weekday: 'long',
