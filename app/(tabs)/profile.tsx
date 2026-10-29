@@ -7,6 +7,7 @@ import {
   GOAL_DETAILS,
   assessTargets,
   buildMacroPlan,
+  planNotes,
   feetInchesToCm,
   lbToKg,
   parseDecimal,
@@ -149,6 +150,7 @@ function BodyEditor({
   const [formulaOverride, setFormulaOverride] = useState<BmrFormula | null>(profile.formulaOverride ?? null);
   const [sexConstant, setSexConstant] = useState<SexConstantChoice | null>(profile.sexConstant ?? null);
   const [error, setError] = useState<Msg | null>(null);
+  const [planNotesShown, setPlanNotesShown] = useState<Msg[]>([]);
 
   // Imperial text is a rounded display of the stored metric value. If the user did not change the text,
   // keep the stored value so saving never drifts it (180 cm -> 180.086 cm).
@@ -163,7 +165,10 @@ function BodyEditor({
   // Editing anything clears a stale 'saved' banner (skip the mount render).
   const mounted = useRef(false);
   useEffect(() => {
-    if (mounted.current) onNotice(null);
+    if (mounted.current) {
+      onNotice(null);
+      setPlanNotesShown([]);
+    }
     mounted.current = true;
   }, [sex, ageText, heightText, inchText, weightText, fatText, activity, goal, pregnant, formulaOverride, sexConstant, onNotice]);
 
@@ -189,6 +194,10 @@ function BodyEditor({
       return;
     }
     const plan = buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: formulaOverride ?? undefined, sexConstant });
+    if (plan.implausible) {
+      setError(plan.implausible);
+      return;
+    }
     if (goal === 'cut' && !plan.goalAllowed) {
       setError(plan.goalBlockReason);
       return;
@@ -196,6 +205,7 @@ function BodyEditor({
     const targets = !profile.targets.custom || recalculate
       ? { kcal: plan.kcal, proteinG: plan.proteinG, carbsG: plan.carbsG, fatG: plan.fatG, fiberG: plan.fiberG, custom: false }
       : profile.targets;
+    // Whenever the targets are regenerated, say how they were adjusted (cap, protein limit, fat trim, carbs at 0).
     const message = profile.targets.custom && !recalculate ? msg('profile.savedKeepCustom') : msg('profile.savedRecalculated');
     const ok = await onSave({
       ...profile,
@@ -217,6 +227,7 @@ function BodyEditor({
       return;
     }
     setError(null);
+    setPlanNotesShown(!profile.targets.custom || recalculate ? planNotes(plan) : []);
   }
 
   return (
@@ -255,6 +266,9 @@ function BodyEditor({
       </View>
       <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
       {error ? <AppText variant="caption" color={theme.colors.warningText}>{tm(error)}</AppText> : null}
+      {planNotesShown.map((note) => (
+        <AppText key={note.key} variant="caption" color={theme.colors.warningText} testID={`plan-note-${note.key}`}>{tm(note)}</AppText>
+      ))}
       <PrimaryButton label={profile.targets.custom ? t('profile.saveKeepTargets') : t('profile.saveRecalculate')} onPress={() => saveBody(false)} />
       {profile.targets.custom ? <SecondaryButton label={t('profile.recalculate')} onPress={() => saveBody(true)} /> : null}
     </Card>

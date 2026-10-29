@@ -284,6 +284,24 @@ export function fatFloorGrams(kcal: number, weightKg: number): number {
 /** Share of kcal that protein may take in default targets (upper bound of the IOM AMDR). */
 export const PROTEIN_MAX_KCAL_SHARE = 0.35;
 
+/**
+ * Highest calorie target Macroyo accepts. The largest plan it can generate is 300 kg at 3% body fat on the
+ * Katch formula, very active, bulking: about 13,900 kcal. The old limit of 10,000 blocked the generated plan
+ * for lean profiles from about 219 kg, so the limit sits above that ceiling and only catches typing slips.
+ */
+export const MAX_TARGET_KCAL = 15000;
+
+/**
+ * Gram limit for one macro target. Protein and carbs are bounded by what the calorie ceiling allows at 4 kcal/g
+ * (the 13,910 kcal worst-case generated plan has 2,068 g of carbs); fat stays at 2,000 g.
+ */
+export function maxTargetGrams(field: 'proteinG' | 'carbsG' | 'fatG'): number {
+  return field === 'fatG' ? 2000 : MAX_TARGET_KCAL / CARB_KCAL;
+}
+
+/** Resting energy below this is not a realistic human (e.g. 30 kg, 100 cm, 120 years gives about 160 kcal). */
+export const MIN_PLAUSIBLE_BMR = 500;
+
 export function macroEnergy(proteinG: number, carbsG: number, fatG: number): number {
   return proteinG * PROTEIN_KCAL + carbsG * CARB_KCAL + fatG * FAT_KCAL;
 }
@@ -324,6 +342,8 @@ export interface MacroPlan {
   macroOvershoot: boolean;
   /** The sex constant Mifflin actually used. */
   mifflinSex: Sex;
+  /** Set when age, height and weight together give an unrealistic resting energy (see MIN_PLAUSIBLE_BMR). */
+  implausible: Msg | null;
 }
 
 /** For unspecified sex only: which Mifflin constant to use. Undefined/null means the average (−78). */
@@ -464,7 +484,35 @@ export function buildMacroPlan(input: PlanInput): MacroPlan {
     fatTrimmed,
     macroOvershoot,
     mifflinSex,
+    implausible: implausibleBodyMessage(bmr),
   };
+}
+
+/** A clear message when the body numbers together are not realistic, else null. Block saving on it. */
+export function implausibleBodyMessage(bmr: number): Msg | null {
+  return bmr < MIN_PLAUSIBLE_BMR ? msg('validate.bodyImplausible', { bmr: Math.round(bmr) }) : null;
+}
+
+/** Same check from the raw body numbers (the onboarding body step, before activity is known). */
+export function bodyPlausibilityIssue(input: Omit<PlanInput, 'activity' | 'goal'>): Msg | null {
+  return buildMacroPlan({ ...input, activity: 'sedentary', goal: 'maintain' }).implausible;
+}
+
+/**
+ * Notes about how the generated targets were adjusted, in the order a person should read them: the cut was held
+ * at the safe limit, protein was limited to 35% of calories, fat was lowered toward its minimum, and (rare) protein
+ * and fat alone exceed the calories so carbs are 0. Onboarding and the Profile recalculation both show these,
+ * so a recalculated plan never changes silently.
+ */
+export function planNotes(plan: MacroPlan, includeCap = true): Msg[] {
+  const notes: Msg[] = [];
+  if (includeCap && plan.capped && plan.capReason) notes.push(plan.capReason);
+  if (plan.proteinCapped) {
+    notes.push(msg('onboarding.proteinLimited', { protein: plan.proteinG, uncapped: plan.proteinUncappedG, perKg: plan.proteinPerKg }));
+  }
+  if (plan.fatTrimmed) notes.push(msg('onboarding.fatTrimmed'));
+  if (plan.macroOvershoot) notes.push(msg('plan.macroOvershoot', { kcal: plan.kcal }));
+  return notes;
 }
 
 export interface TargetDraft {
@@ -479,6 +527,9 @@ export interface TargetIssue {
   blocking: boolean;
   message: Msg;
 }
+
+/** Rounding slack for the protein note: a generated plan rounds grams and kcal, and must never trigger it. */
+export const PROTEIN_NOTE_SLACK_G = 0.6;
 
 /** Carbs under this many grams get a standalone warning (spec 2.4: "under 50 g/day"). */
 export const LOW_CARB_WARNING_G = 50;
@@ -498,6 +549,16 @@ export function macroMismatchTolerance(kcal: number): number {
  */
 export function targetNotices(draft: TargetDraft): TargetIssue[] {
   const issues: TargetIssue[] = [];
+  if (draft.kcal != null && draft.kcal > 0 && draft.proteinG != null && draft.proteinG >= 0) {
+    const capG = (draft.kcal * PROTEIN_MAX_KCAL_SHARE) / PROTEIN_KCAL;
+    if (draft.proteinG > capG + PROTEIN_NOTE_SLACK_G) {
+      issues.push({
+        field: 'proteinG',
+        blocking: false,
+        message: msg('targets.proteinHigh', { pct: Math.round(((draft.proteinG * PROTEIN_KCAL) / draft.kcal) * 100) }),
+      });
+    }
+  }
   if (draft.carbsG != null && draft.carbsG >= 0 && draft.carbsG < LOW_CARB_NOTE_G) {
     issues.push({
       field: 'carbsG',
@@ -545,8 +606,8 @@ export function assessTargets(
     issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalMissing') });
   } else if (draft.kcal <= 0) {
     issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalZero') });
-  } else if (draft.kcal > 10000) {
-    issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalTooHigh') });
+  } else if (draft.kcal > MAX_TARGET_KCAL) {
+    issues.push({ field: 'kcal', blocking: true, message: msg('targets.kcalTooHigh', { max: MAX_TARGET_KCAL }) });
   } else if (draft.kcal + 0.5 < floor) {
     issues.push({
       field: 'kcal',
@@ -559,7 +620,7 @@ export function assessTargets(
     const value = draft[field];
     if (value == null) issues.push({ field, blocking: true, message: msg(`targets.missing.${field}`) });
     else if (value < 0) issues.push({ field, blocking: true, message: msg(`targets.negative.${field}`) });
-    else if (value > 2000) issues.push({ field, blocking: true, message: msg(`targets.tooHigh.${field}`) });
+    else if (value > maxTargetGrams(field)) issues.push({ field, blocking: true, message: msg(`targets.tooHigh.${field}`, { max: maxTargetGrams(field) }) });
   }
 
   if (draft.kcal != null && draft.kcal > 0 && draft.fatG != null && draft.fatG >= 0 && weightKg > 0) {

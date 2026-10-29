@@ -62,7 +62,8 @@ export function parseCustomOffset(raw: string, fallback: OffsetDirection = 'surp
     return { offset: 0, magnitude: 0, signedDirection, direction, empty: false, valid: false, message: msg('offset.invalid') };
   }
   return {
-    offset: direction === 'deficit' ? -magnitude : magnitude,
+    // magnitude 0 must give +0: "-0" would otherwise produce an offset of -0.
+    offset: magnitude === 0 ? 0 : direction === 'deficit' ? -magnitude : magnitude,
     magnitude,
     signedDirection,
     direction,

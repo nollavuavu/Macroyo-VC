@@ -232,6 +232,9 @@ export default function CalcScreen() {
             <AppText variant="caption" color={theme.colors.textSecondary}>
               {t('calc.estimateBmr', { bmr: typedInvalid ? '—' : formatKcal(plan.bmr) })}
             </AppText>
+            {plan.implausible && !typedInvalid ? (
+              <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="calc-implausible">{tm(plan.implausible)}</AppText>
+            ) : null}
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} />
             <GroupLabel>{t('common.sex')}</GroupLabel>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>

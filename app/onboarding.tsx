@@ -6,7 +6,9 @@ import {
   GOAL_DETAILS,
   assessTargets,
   bmiMetric,
+  bodyPlausibilityIssue,
   buildMacroPlan,
+  planNotes,
   feetInchesToCm,
   lbToKg,
   parseDecimal,
@@ -67,6 +69,12 @@ export default function OnboardingScreen() {
   const weightCheck = validateWeightKg(weightKg);
   const fatCheck = validateBodyFat(bodyFat);
 
+  // Unrealistic combinations (e.g. 30 kg, 100 cm, 120 years) are stopped on the body step with a clear message.
+  const implausible = useMemo(() => {
+    if (!sex || !ageCheck.ok || !heightCheck.ok || !weightCheck.ok || !fatCheck.ok || heightCm == null || weightKg == null || age == null) return null;
+    return bodyPlausibilityIssue({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, formula: formulaChoice ?? undefined, pregnant, sexConstant });
+  }, [age, ageCheck.ok, bodyFat, fatCheck.ok, formulaChoice, heightCheck.ok, heightCm, pregnant, sex, sexConstant, weightCheck.ok, weightKg]);
+
   const plan = useMemo(() => {
     if (!sex || !ageCheck.ok || !heightCheck.ok || !weightCheck.ok || !fatCheck.ok || !activity || heightCm == null || weightKg == null || age == null) {
       return null;
@@ -98,6 +106,7 @@ export default function OnboardingScreen() {
     setShowErrors(true);
     if (step === 1) {
       if (!sex || !ageCheck.ok || !heightCheck.ok || !weightCheck.ok || !fatCheck.ok) return;
+      if (implausible) return;
     }
     if (step === 2 && !activity) return;
     if (step === 3 && !goal) return;
@@ -231,6 +240,7 @@ export default function OnboardingScreen() {
           <Field label={t('common.weight')} value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? text(weightCheck.message) : null} />
           <Field label={t('common.bodyFatOptional')} value={fatText} onChangeText={setFatText} suffix="%" placeholder={t('onboarding.bodyFatPlaceholder')} error={showErrors ? text(fatCheck.message) : null} />
           <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
+          {showErrors && implausible ? <AppText variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID="body-implausible">{tm(implausible)}</AppText> : null}
         </View>
       ) : null}
 
@@ -290,14 +300,9 @@ export default function OnboardingScreen() {
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {t('onboarding.splitNote', { protein: plan.proteinG, perKg: plan.proteinPerKg, fat: plan.fatG, carbs: plan.carbsG, fiber: plan.fiberG, kcal: plan.macroKcal })}
           </AppText>
-          {plan.proteinCapped && !targetsEdited ? (
-            <AppText variant="caption" color={theme.colors.textSecondary}>
-              {t('onboarding.proteinLimited', { protein: plan.proteinG, uncapped: plan.proteinUncappedG, perKg: plan.proteinPerKg })}
-            </AppText>
-          ) : null}
-          {plan.fatTrimmed && !targetsEdited ? (
-            <AppText variant="caption" color={theme.colors.textSecondary}>{t('onboarding.fatTrimmed')}</AppText>
-          ) : null}
+          {(targetsEdited ? [] : planNotes(plan, false)).map((note) => (
+            <AppText key={note.key} variant="caption" color={theme.colors.textSecondary} testID={`plan-note-${note.key}`}>{tm(note)}</AppText>
+          ))}
           {targetNotices(shownDraft).map((notice) => (
             <AppText key={notice.message.key} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>
               {tm(notice.message)}
