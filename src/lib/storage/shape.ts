@@ -83,6 +83,20 @@ function checkProfile(profile: Rec): void {
   maybe('profile.targets', targets, 'custom', isBoolean, 'true or false');
 }
 
+/**
+ * The first build (before the carbs fix) could write a NEGATIVE carbs target for a heavy user on a cut (e.g. -30 g,
+ * calories left over after protein and fat). That data is legacy, not damage, so it loads with carbs clamped to 0 (the
+ * next save writes it back that way) instead of failing the whole blob. Only carbs, and only a plausible negative:
+ * every other negative or huge amount is still a read failure.
+ */
+function withLegacyCarbsClamped(profile: Rec): Rec {
+  const targets = profile.targets;
+  if (!isRecord(targets)) return profile;
+  const carbs = targets.carbsG;
+  if (isFiniteNumber(carbs) && carbs < 0 && carbs >= -STORED_MAX_GRAMS) return { ...profile, targets: { ...targets, carbsG: 0 } };
+  return profile;
+}
+
 /** A food-log entry: identity, when and what, and the amounts the day totals add up. */
 function checkLog(entry: Rec, index: number): void {
   const where = `logs[${index}]`;
@@ -124,15 +138,17 @@ function recordList(name: string, value: unknown, check: (record: Rec, index: nu
 export function validateStoredData(parsed: unknown): AppData {
   if (!isRecord(parsed)) throw new Error('stored data is not an object');
   const { profile, logs, bodyStats, language, appearance } = parsed;
+  let cleanProfile: unknown = profile;
   if (profile != null) {
     if (!isRecord(profile)) throw new Error('stored profile is not an object');
-    checkProfile(profile);
+    cleanProfile = withLegacyCarbsClamped(profile);
+    checkProfile(cleanProfile as Rec);
   }
   if (logs != null) recordList('logs', logs, checkLog);
   if (bodyStats != null) recordList('body stats', bodyStats, checkBodyStat);
   const empty = freshEmptyData();
   return {
-    profile: (profile ?? null) as AppData['profile'],
+    profile: (cleanProfile ?? null) as AppData['profile'],
     logs: (logs ?? empty.logs) as AppData['logs'],
     bodyStats: (bodyStats ?? empty.bodyStats) as AppData['bodyStats'],
     ...(isLanguagePref(language) ? { language } : {}),

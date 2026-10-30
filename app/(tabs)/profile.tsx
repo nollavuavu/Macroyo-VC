@@ -34,7 +34,7 @@ import { appearanceOf } from '@/src/lib/storage/prefs';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { eraseThenLeave } from '@/src/lib/reset';
-import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, StorageProblem, SwitchRow, WarningLine, WarningNotice } from '@/src/components/ui';
+import { AppText, Card, Chip, ConfirmErase, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, StorageProblem, SwitchRow, WarningLine, WarningNotice } from '@/src/components/ui';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -116,12 +116,16 @@ export default function ProfileScreen() {
           {t('profile.logEntries', { count: data.logs.length })} · {t('profile.bodyEntries', { count: data.bodyStats.length })}. {t('profile.dataLocal')}
         </AppText>
         {confirmReset ? (
-          <>
-            <WarningLine>{t('profile.eraseWarning')}</WarningLine>
+          <ConfirmErase
+            testID="erase-confirm"
+            confirmTestID="erase-everything"
+            warning={t('profile.eraseWarning')}
+            confirmLabel={t('profile.eraseEverything')}
+            onConfirm={() => { void eraseThenLeave(resetAll, () => router.replace('/onboarding')); }}
+            onCancel={() => setConfirmReset(false)}
+          >
             {storageError ? <WarningNotice testID="erase-error" variant="caption">{tm(storageError)}</WarningNotice> : null}
-            <PrimaryButton label={t('profile.eraseEverything')} onPress={() => { void eraseThenLeave(resetAll, () => router.replace('/onboarding')); }} testID="erase-everything" />
-            <SecondaryButton label={t('common.cancel')} onPress={() => setConfirmReset(false)} />
-          </>
+          </ConfirmErase>
         ) : (
           <SecondaryButton label={t('profile.resetData')} onPress={() => setConfirmReset(true)} testID="reset-data" />
         )}

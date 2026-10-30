@@ -125,19 +125,65 @@ export function StorageBanner() {
   const theme = useTheme();
   const { t, tm } = useI18n();
   const { error, noticeVisible, readFailed, resetAll, retry, dismissError } = useApp();
+  const [confirming, setConfirming] = useState(false);
   if (!error || !noticeVisible) return null;
   return (
     <View style={{ paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm }}>
       <WarningNotice framed testID="storage-banner" onDismiss={dismissError} actions={(
         <>
           <SecondaryButton label={t('storage.retry')} onPress={() => { void retry(); }} testID="storage-retry" />
-          {readFailed ? (
-            <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="reset-unreadable" tone="destructive" />
+          {readFailed && !confirming ? (
+            <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => setConfirming(true)} testID="reset-unreadable" tone="destructive" />
+          ) : null}
+          {readFailed && confirming ? (
+            <ConfirmErase
+              testID="storage-banner-erase"
+              warning={t('storage.eraseConfirm')}
+              confirmLabel={t('storage.eraseConfirmButton')}
+              onConfirm={() => { void resetAll(); }}
+              onCancel={() => setConfirming(false)}
+            />
           ) : null}
         </>
       )}>
         {tm(error)}
       </WarningNotice>
+    </View>
+  );
+}
+
+/**
+ * The confirm step for every "erase" in the app (Profile > Reset data, and the two storage-problem cards). It is an
+ * inline card rather than a system alert, so it behaves the same on web and native: the warning says what is lost and
+ * that it cannot be undone, the confirm button is the destructive style (amber outline, never the default look), and
+ * Cancel sits right under it. It is announced as an alert when it appears. Nothing is erased before the confirm press.
+ */
+export function ConfirmErase({
+  warning,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  testID,
+  confirmTestID,
+  children,
+}: {
+  warning: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  testID?: string;
+  confirmTestID?: string;
+  /** Extra content between the warning and the buttons (a failed-erase message). */
+  children?: ReactNode;
+}) {
+  const theme = useTheme();
+  const { t } = useI18n();
+  return (
+    <View testID={testID} role="alert" accessibilityLiveRegion="assertive" style={{ gap: theme.spacing.sm }}>
+      <WarningLine>{warning}</WarningLine>
+      {children}
+      <SecondaryButton label={confirmLabel} onPress={onConfirm} testID={confirmTestID ?? (testID ? `${testID}-confirm` : undefined)} tone="destructive" />
+      <SecondaryButton label={t('common.cancel')} onPress={onCancel} testID={testID ? `${testID}-cancel` : undefined} />
     </View>
   );
 }
@@ -215,11 +261,14 @@ export function StorageProblem() {
           <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => setConfirming(true)} testID="storage-problem-erase" tone="destructive" />
         ) : null}
         {readFailed && confirming ? (
-          <>
-            <WarningLine>{t('profile.eraseWarning')}</WarningLine>
-            <PrimaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="storage-problem-erase-confirm" />
-            <SecondaryButton label={t('common.cancel')} onPress={() => setConfirming(false)} />
-          </>
+          <ConfirmErase
+            testID="storage-problem-erase-confirm-card"
+            confirmTestID="storage-problem-erase-confirm"
+            warning={t('storage.eraseConfirm')}
+            confirmLabel={t('storage.eraseConfirmButton')}
+            onConfirm={() => { void resetAll(); }}
+            onCancel={() => setConfirming(false)}
+          />
         ) : null}
       </>
     )}>

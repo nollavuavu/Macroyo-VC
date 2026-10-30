@@ -105,13 +105,13 @@ describe('UI-R4-3: the custom kcal field does not ask for a minus key', () => {
 });
 
 describe('UI-R4-4: no "male reference data" note under a result that is not banded', () => {
-  it('only shown for a banded result for someone other than a male reading', () => {
+  it('hidden for every non-banded result (see polish6 for the male case)', () => {
     for (const sex of ['female', 'unspecified'] as const) {
       const reading = interpretFfmi(sex, 17.4);
       expect(reading.banded).toBe(false);
       expect(showMaleReferenceNote(sex, reading)).toBe(false);
     }
-    expect(showMaleReferenceNote('male', interpretFfmi('male', 21))).toBe(false);
+    expect(showMaleReferenceNote('male', interpretFfmi('male', 21))).toBe(true); // corrected in polish 6 (see polish6.test.ts)
     expect(read('app/(tabs)/calc.tsx')).toMatch(/showMaleReferenceNote\(sex, ffmiReading\)/);
     expect(read('app/(tabs)/calc.tsx')).not.toMatch(/sex !== 'male' \? \(/);
   });
@@ -156,7 +156,8 @@ describe('BUG-QA-17: stored profiles with impossible numbers are read failures',
   });
   it('rejects negative and huge targets', () => {
     for (const field of ['kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG']) {
-      expect(() => validateStoredData({ profile: profile({}, { [field]: -1 }) }), `${field} -1`).toThrow(/targets/);
+      // carbs -1 is the one exception: legacy data, clamped to 0 on load (BUG-QA-18, polish6.test.ts)
+      if (field !== 'carbsG') expect(() => validateStoredData({ profile: profile({}, { [field]: -1 }) }), `${field} -1`).toThrow(/targets/);
       expect(() => validateStoredData({ profile: profile({}, { [field]: 1e9 }) }), `${field} 1e9`).toThrow(/targets/);
     }
     expect(() => validateStoredData({ profile: profile({}, { kcal: STORED_MAX_KCAL }) })).not.toThrow();

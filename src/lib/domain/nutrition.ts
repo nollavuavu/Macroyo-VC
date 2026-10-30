@@ -208,9 +208,12 @@ export interface FfmiReading {
   banded: boolean;
 }
 
-/** The "bands come from male reference data" note only belongs under a result that shows bands for someone else. */
+/**
+ * "Bands shown are from male reference data" belongs under a result that shows bands, and bands are only ever shown for
+ * a male reading. A result that is not banded (anyone else) has its own "not validated for women" explanation instead.
+ */
 export function showMaleReferenceNote(sex: Sex, reading: FfmiReading): boolean {
-  return reading.banded && sex !== 'male';
+  return reading.banded && sex === 'male';
 }
 
 /**

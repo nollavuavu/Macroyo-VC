@@ -281,7 +281,7 @@ describe('P3: a standing "Storage problem" entry stays reachable after the card 
     expect(block).toMatch(/storage\.retry/);
     expect(block).toMatch(/readFailed && !confirming/);
     expect(block).toMatch(/readFailed && confirming/);
-    expect(block).toMatch(/profile\.eraseWarning/);
+    expect(block).toMatch(/storage\.eraseConfirm/);
     expect(block).toMatch(/\{t\('storage\.problem'\)\} \{tm\(error\)\}/);
   });
   it('Profile (both branches) and onboarding render it; the new string exists in every locale', () => {

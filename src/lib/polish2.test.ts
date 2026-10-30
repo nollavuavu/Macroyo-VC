@@ -30,7 +30,7 @@ describe('B P1: storage error banner is a card with an icon, warningText and a R
     const banner = ui.slice(ui.indexOf('export function StorageBanner'), ui.indexOf('export function WarningNotice'));
     expect(banner).toMatch(/<WarningNotice framed/);
     expect(banner).toMatch(/storage\.retry/);
-    expect(banner).toMatch(/readFailed \?[\s\S]*storage\.eraseUnreadable/);
+    expect(banner).toMatch(/readFailed && !confirming \?[\s\S]*storage\.eraseUnreadable/);
     const notice = ui.slice(ui.indexOf('export function WarningNotice'));
     expect(notice).toMatch(/<TriangleAlert/);
     expect(notice).toMatch(/backgroundColor: theme\.colors\.surface/);
