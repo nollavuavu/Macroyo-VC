@@ -7,6 +7,7 @@
  */
 import { msg } from '../../i18n/msg';
 import type { Msg } from '../../i18n/types';
+import { preferencesToKeep } from './prefs';
 import { EMPTY_DATA, type AppData } from './types';
 
 export const SAVE_FAILED_MESSAGE: Msg = msg('storage.saveFailed');
@@ -105,7 +106,8 @@ export async function openStore(deps: StoreDeps): Promise<StateStore> {
       }),
     reset: () =>
       run(async (): Promise<CommitResult> => {
-        const empty = emptyData();
+        // Erase the health data, but keep the language and appearance the person chose.
+        const empty: AppData = { ...emptyData(), ...preferencesToKeep(data) };
         try {
           await deps.save(empty);
         } catch {

@@ -71,6 +71,8 @@ export interface AppData {
   bodyStats: BodyStat[];
   /** UI language preference. Absent means follow the device (same as 'system'). */
   language?: LanguagePref;
+  /** Light, dark or system. Kept at the top level so a data reset does not lose it. Older data has it only on the profile. */
+  appearance?: Appearance;
 }
 
 export const EMPTY_DATA: AppData = { profile: null, logs: [], bodyStats: [] };

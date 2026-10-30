@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import {
+  displayKcal,
   parseDecimal,
   quickAddDecision,
   validatePortionGrams,
@@ -83,6 +84,11 @@ export default function LogScreen() {
   const scrollRef = useRef<Scroller>(null);
   // The same hook scrolls to the first invalid field when Save is blocked, in screen order, and to a confirm warning.
   const form = useFormScroll<string>(scrollRef, theme.spacing.xxl);
+  // A warning scrolls into view when it appears, not on every re-layout; clearing it re-arms the scroll.
+  const quickWarningShown = quickWarning != null;
+  const editWarningShown = editing != null && editWarning != null;
+  useEffect(() => { if (!quickWarningShown) form.forget('quick.warning'); }, [form, quickWarningShown]);
+  useEffect(() => { if (!editWarningShown) form.forget('portion.warning'); }, [form, editWarningShown]);
 
   const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
   const results = allResults.slice(0, shown);
@@ -354,7 +360,7 @@ export default function LogScreen() {
             </View>
           ) : null}
           {editing && editWarning ? (
-            <WarningNotice testID="edit-warning" onLayout={(event) => { form.field('portion.warning', 'portionCard')(event); form.reveal('portion.warning'); }}>
+            <WarningNotice testID="edit-warning" onLayout={(event) => { form.field('portion.warning', 'portionCard')(event); form.revealOnce('portion.warning'); }}>
               {tm(editWarning)} {t('log.fixOrSave')}
             </WarningNotice>
           ) : null}
@@ -382,7 +388,7 @@ export default function LogScreen() {
           <Field label={t('log.portion')} value={quickGrams} onChangeText={quickInput('grams', setQuickGrams)} error={text(quickErrors.grams)} suffix="g" onLayout={form.field('quick.grams', 'quickCard')} />
           {formError ? <WarningLine>{tm(formError)}</WarningLine> : null}
           {quickWarning ? (
-            <WarningNotice testID="quick-warning" onLayout={(event) => { form.field('quick.warning', 'quickCard')(event); form.reveal('quick.warning'); }}>
+            <WarningNotice testID="quick-warning" onLayout={(event) => { form.field('quick.warning', 'quickCard')(event); form.revealOnce('quick.warning'); }}>
               {tm(quickWarning)} {t('log.fixOrSave')}
             </WarningNotice>
           ) : null}
@@ -443,7 +449,7 @@ export default function LogScreen() {
         <Card key={entry.id}>
           <AppText>{entry.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
-            {t('log.entryDetail', { grams: formatAmount(entry.grams), kcal: formatKcal(entry.kcal), fiber: formatFiber(entry.fiberG) })}
+            {t('log.entryDetail', { grams: formatAmount(entry.grams), kcal: formatKcal(displayKcal(entry.kcal)), fiber: formatFiber(entry.fiberG) })}
           </AppText>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
             <SecondaryButton label={t('common.edit')} onPress={() => openEdit(entry)} />

@@ -30,23 +30,20 @@ export function scaleHalfUp1(per100: number, grams: number): number {
 }
 
 /**
- * Round a list of values to whole numbers that add up to the rounded total (largest remainder).
- * Used so meal rows and the day total on Today never disagree by 1.
+ * THE kcal display rounding: whole kcal, half-up. Every kcal shown for a logged entry (Log rows, Today rows) goes
+ * through this, and every kcal total (meal subtotal, day total, ring, "left") is the SUM OF THESE ROUNDED ROWS, so
+ * the numbers on screen always add up. The old largest-remainder allocation chose its winners from the true total
+ * (1000.2), so on Today 520.5 showed 520 while Log showed 521; plain half-up per row has no such cross-row effect.
+ * The displayed total can differ from the exact total by under half a kcal per row (350 + 520.5 + 129.7 = 1000.2
+ * shows as 1,001, the sum of 350, 521 and 130).
  */
-export function roundToSum(values: readonly number[]): { rounded: number[]; total: number } {
-  const total = roundHalfUp(values.reduce((sum, value) => sum + value, 0), 0);
-  const floors = values.map((value) => Math.floor(value));
-  let missing = total - floors.reduce((sum, value) => sum + value, 0);
-  const order = values
-    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
-    .sort((x, y) => y.fraction - x.fraction || x.index - y.index);
-  const rounded = [...floors];
-  for (const item of order) {
-    if (missing <= 0) break;
-    rounded[item.index] += 1;
-    missing -= 1;
-  }
-  return { rounded, total };
+export function displayKcal(kcal: number): number {
+  return roundHalfUp(kcal, 0);
+}
+
+/** The displayed total of some entries: the sum of their displayed (rounded) rows. */
+export function displayKcalTotal(entries: readonly { kcal: number }[]): number {
+  return entries.reduce((sum, entry) => sum + displayKcal(entry.kcal), 0);
 }
 
 export interface RemainingDisplay {

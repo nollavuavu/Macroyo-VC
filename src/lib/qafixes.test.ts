@@ -13,7 +13,8 @@ import {
   quickAddDecision,
   quickAddFieldErrors,
   remainingDisplay,
-  roundToSum,
+  displayKcal,
+  displayKcalTotal,
   scaleHalfUp1,
   targetNotices,
   validateQuickAdd,
@@ -309,23 +310,24 @@ describe('UI-1: standalone low-carb warning (spec: under 50 g)', () => {
 });
 
 describe('UI-2: rows, total, ring and remaining agree', () => {
-  it('rounded rows sum to the rounded total (largest remainder)', () => {
+  it('rounded rows sum to the displayed total (half-up per row, total built from the rows)', () => {
     const cases = [[0.4, 0.4, 0.4], [10.5, 10.5, 10.5, 10.5], [1.1, 2.2, 3.3], [100.6, 200.6, 300.6], [0.3, 0.3, 0.4]];
     for (const values of cases) {
-      const { rounded, total } = roundToSum(values);
-      expect(rounded.reduce((sum, value) => sum + value, 0)).toBe(total);
-      values.forEach((value, index) => expect(Math.abs(rounded[index] - value)).toBeLessThan(1));
+      const entries = values.map((kcal) => ({ kcal }));
+      const rows = entries.map((entry) => displayKcal(entry.kcal));
+      expect(rows.reduce((sum, value) => sum + value, 0)).toBe(displayKcalTotal(entries));
+      values.forEach((value, index) => expect(Math.abs(rows[index] - value)).toBeLessThanOrEqual(0.5));
     }
-    expect(roundToSum([0.4, 0.4, 0.4]).total).toBe(1);
-    expect(roundToSum([]).total).toBe(0);
+    expect(displayKcalTotal([])).toBe(0);
   });
-  it('randomised: rows always add up to the total', () => {
+  it('randomised: a row never differs from its own half-up rounding, and rows add up to the total', () => {
     let seed = 7;
     const next = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
     for (let i = 0; i < 2000; i += 1) {
-      const values = Array.from({ length: 1 + Math.floor(next() * 8) }, () => Math.round(next() * 9000) / 10);
-      const { rounded, total } = roundToSum(values);
-      expect(rounded.reduce((sum, value) => sum + value, 0)).toBe(total);
+      const entries = Array.from({ length: 1 + Math.floor(next() * 8) }, () => ({ kcal: Math.round(next() * 9000) / 10 }));
+      const rows = entries.map((entry) => displayKcal(entry.kcal));
+      rows.forEach((row, index) => expect(row).toBe(Math.floor(entries[index].kcal + 0.5)));
+      expect(rows.reduce((sum, value) => sum + value, 0)).toBe(displayKcalTotal(entries));
     }
   });
   it('shows "0 left" at the target and never a fractional remainder', () => {

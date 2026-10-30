@@ -27,9 +27,10 @@ import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
 import { formatFixed, formatInputNumber, formatKcal } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
+import { appearanceOf } from '@/src/lib/storage/prefs';
 import type { Profile } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningLine, WarningNotice, type Scroller } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, StorageProblem, SwitchRow, WarningLine, WarningNotice, type Scroller } from '@/src/components/ui';
 import { onboardingHint } from '@/src/lib/onboardingHint';
 import { marks } from '@/src/theme/extras';
 import { useFormScroll } from '@/src/lib/formScroll';
@@ -169,7 +170,7 @@ export default function OnboardingScreen() {
       activity,
       goal: plan.goal,
       units,
-      appearance: 'system',
+      appearance: appearanceOf(data), // a kept choice (it survives a data reset), else System
       pregnant,
       formula: plan.formula,
       formulaOverride: formulaChoice,
@@ -191,6 +192,8 @@ export default function OnboardingScreen() {
           <View style={{ width: `${((step + 1) / STEPS.length) * 100}%`, height: theme.spacing.xs, backgroundColor: theme.colors.primary }} />
         </View>
       </View>
+      {/* Unreadable data sends every launch here (the tabs redirect), so the erase option must be reachable here too. */}
+      <StorageProblem />
 
       {step === 0 ? (
         <View style={{ gap: theme.spacing.lg, minHeight: windowHeight * 0.55, justifyContent: 'center', alignItems: 'center' }}>
@@ -289,7 +292,8 @@ export default function OnboardingScreen() {
               <View key={option} style={{ gap: theme.spacing.xs }}>
                 <Chip
                   label={tm(GOAL_DETAILS[option].label)}
-                  detail={tm(GOAL_DETAILS[option].description)}
+                  // A disabled card must not promise "about 20% under maintenance": it says it is unavailable, and the reason follows.
+                  detail={blocked ? t('goal.cut.unavailable') : tm(GOAL_DETAILS[option].description)}
                   selected={goal === option}
                   disabled={blocked}
                   onPress={() => setGoal(option)}

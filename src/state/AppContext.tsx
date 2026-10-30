@@ -7,6 +7,8 @@ import { getLocale, setLocale, subscribeLocale } from '../i18n/state';
 import { useI18n } from '../i18n/react';
 import { deviceLanguageTags, resolvePreference } from '../i18n/detect';
 import type { LanguagePref, Msg } from '../i18n/types';
+import { appearanceOf, withAppearance } from '../lib/storage/prefs';
+import type { Appearance } from '../lib/storage/types';
 import { NO_NOTICE, dismissNotice, noticeVisible, raiseNotice, type NoticeState } from '../lib/storage/notice';
 import {
   EMPTY_DATA,
@@ -50,6 +52,8 @@ interface AppContextValue {
   retry: () => Promise<boolean>;
   /** Persist the language preference and switch the UI language immediately. */
   setLanguage: (language: LanguagePref) => Promise<boolean>;
+  /** Persist the appearance (kept across a data reset). */
+  setAppearance: (appearance: Appearance) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -135,6 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     addBodyStat: (stat) => commit((cur) => ({ ...cur, bodyStats: [stat, ...cur.bodyStats] })),
     deleteBodyStat: (id) => commit((cur) => ({ ...cur, bodyStats: cur.bodyStats.filter((item) => item.id !== id) })),
+    setAppearance: (appearance) => commit((cur) => withAppearance(cur, appearance)),
     setLanguage: async (language) => {
       const ok = await commit((cur) => ({ ...cur, language }));
       if (ok) setLocale(resolvePreference(language, deviceLanguageTags()));
@@ -197,7 +202,7 @@ function usePreferredScheme(): 'light' | 'dark' {
 export function useTheme(): Theme {
   const system = usePreferredScheme();
   const { data } = useApp();
-  const appearance = data.profile?.appearance ?? 'system';
+  const appearance = appearanceOf(data);
   const scheme = appearance === 'system' ? system : appearance;
   const { locale } = useI18n();
   return getTheme(scheme, locale);

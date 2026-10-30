@@ -3,7 +3,7 @@ import { Image, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Drumstick, Droplets, Plus, Wheat } from 'lucide-react-native';
 import { borderStrong } from '@/src/theme/extras';
-import { progressRatio, roundToSum, sumLogged } from '@/src/lib/domain';
+import { displayKcal, displayKcalTotal, progressRatio, sumLogged } from '@/src/lib/domain';
 import { MEALS, MEAL_KEY, addDays, dayAccessibilityLabel, formatLongDate, weekDates, weekdayNarrow, type Meal } from '@/src/lib/dates';
 import { NBSP, formatAmount, formatKcal, formatPercent, withUnit } from '@/src/lib/format';
 import { formatFiber } from '@/src/lib/foods/foods';
@@ -40,14 +40,11 @@ export default function TodayScreen() {
     return map;
   }, [entries]);
 
-  // Round once, from the same values: item rows add up to meal subtotals, and subtotals to the day total.
-  const kcalDisplay = useMemo(() => {
-    const ordered = MEALS.flatMap((meal) => grouped.get(meal) ?? []);
-    const { rounded, total } = roundToSum(ordered.map((entry) => entry.kcal));
-    const byId = new Map<string, number>();
-    ordered.forEach((entry, index) => byId.set(entry.id, rounded[index]));
-    return { byId, total };
-  }, [grouped]);
+  // One display rounding (displayKcal, half-up) for every row; subtotals and the day total are sums of those rows.
+  const dayKcal = displayKcalTotal(entries);
+  // The empty state has its own "Log a meal" button, and a floating + would sit on top of its text at rest (UI-R3-2),
+  // so the button only floats once there is a list to add to (the list keeps the FAB clearance padding).
+  const showFab = entries.length > 0;
 
   async function copyYesterday() {
     const previous = data.logs.filter((entry) => entry.date === addDays(date, -1));
@@ -60,7 +57,7 @@ export default function TodayScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Screen testID="screen-today" fabClearance>
+      <Screen testID="screen-today" fabClearance={showFab}>
         <View>
           <AppText variant="title">{t('today.title')}</AppText>
           <AppText variant="secondary" color={theme.colors.textSecondary}>{formatLongDate(date)}</AppText>
@@ -99,7 +96,7 @@ export default function TodayScreen() {
         </View>
 
         <Card>
-          <CalorieRing consumed={kcalDisplay.total} target={targets?.kcal ?? 0} />
+          <CalorieRing consumed={dayKcal} target={targets?.kcal ?? 0} />
         </Card>
 
         <Card style={{ gap: theme.spacing.md }}>
@@ -145,7 +142,7 @@ export default function TodayScreen() {
         ) : (
           MEALS.map((meal) => {
             const items = grouped.get(meal) ?? [];
-            const subtotal = items.reduce((sum, item) => sum + (kcalDisplay.byId.get(item.id) ?? 0), 0);
+            const subtotal = displayKcalTotal(items);
             return (
               <Card key={meal} style={{ gap: theme.spacing.sm }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.sizes.minTouchTarget }}>
@@ -158,7 +155,7 @@ export default function TodayScreen() {
                   <View key={item.id} style={{ paddingVertical: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
                     <AppText>{item.name}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>
-                      {t('today.itemDetail', { grams: formatAmount(item.grams), kcal: formatKcal(kcalDisplay.byId.get(item.id) ?? item.kcal), p: formatAmount(item.proteinG), c: formatAmount(item.carbsG), f: formatAmount(item.fatG), fiber: formatFiber(item.fiberG) })}
+                      {t('today.itemDetail', { grams: formatAmount(item.grams), kcal: formatKcal(displayKcal(item.kcal)), p: formatAmount(item.proteinG), c: formatAmount(item.carbsG), f: formatAmount(item.fatG), fiber: formatFiber(item.fiberG) })}
                     </AppText>
                   </View>
                 ))}
@@ -187,25 +184,27 @@ export default function TodayScreen() {
         )}
         {toast ? <AppText variant="caption" color={theme.colors.primary}>{tm(toast)}</AppText> : null}
       </Screen>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('today.logFood')}
-        onPress={() => router.push({ pathname: '/log', params: { date } })}
-        style={{
-          position: 'absolute',
-          right: theme.spacing.lg,
-          bottom: fabGeometry(theme).bottom,
-          width: theme.sizes.fab,
-          height: theme.sizes.fab,
-          borderRadius: theme.sizes.fab / 2,
-          backgroundColor: theme.colors.accent,
-          alignItems: 'center',
-          justifyContent: 'center',
-          ...theme.shadows.floating,
-        }}
-      >
-        <Plus color={theme.colors.onAccent} size={icons.fab} strokeWidth={strokes.bold} />
-      </Pressable>
+      {showFab ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('today.logFood')}
+          onPress={() => router.push({ pathname: '/log', params: { date } })}
+          style={{
+            position: 'absolute',
+            right: theme.spacing.lg,
+            bottom: fabGeometry(theme).bottom,
+            width: theme.sizes.fab,
+            height: theme.sizes.fab,
+            borderRadius: theme.sizes.fab / 2,
+            backgroundColor: theme.colors.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...theme.shadows.floating,
+          }}
+        >
+          <Plus color={theme.colors.onAccent} size={icons.fab} strokeWidth={strokes.bold} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

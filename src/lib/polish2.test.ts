@@ -90,8 +90,8 @@ describe('B P1: quick-add and edit warnings scroll into view', () => {
   it('log.tsx scrolls on both the quick-add and the edit warning', () => {
     const log = read('app/(tabs)/log.tsx');
     expect(log).toMatch(/scrollRef=\{scrollRef\}/);
-    expect(log).toMatch(/testID="quick-warning" onLayout=\{\(event\) => \{ form\.field\('quick\.warning', 'quickCard'\)\(event\); form\.reveal\('quick\.warning'\); \}\}/);
-    expect(log).toMatch(/testID="edit-warning" onLayout=\{\(event\) => \{ form\.field\('portion\.warning', 'portionCard'\)\(event\); form\.reveal\('portion\.warning'\); \}\}/);
+    expect(log).toMatch(/testID="quick-warning" onLayout=\{\(event\) => \{ form\.field\('quick\.warning', 'quickCard'\)\(event\); form\.revealOnce\('quick\.warning'\); \}\}/);
+    expect(log).toMatch(/testID="edit-warning" onLayout=\{\(event\) => \{ form\.field\('portion\.warning', 'portionCard'\)\(event\); form\.revealOnce\('portion\.warning'\); \}\}/);
   });
 });
 
@@ -142,7 +142,7 @@ describe('B P2: search rows, legends, warnings', () => {
     expect(contrastRatio(lightColors.warning, lightColors.surface)).toBeLessThan(3); // why the swap was needed
     expect(read('src/components/Ring.tsx')).toMatch(/stroke=\{warningBoundary\(theme\)\}/);
     expect(read('src/components/ui.tsx')).toMatch(/error \? warningBoundary\(theme\)/);
-    expect(read('app/(tabs)/trends.tsx')).toMatch(/overOutline=\{warningBoundary\(theme\)\}/);
+    expect(read('app/(tabs)/trends.tsx')).toMatch(/overBarPaint\(theme, barWidth\)/); // outline colour comes from warningBoundary via the helper
   });
   it('quick-add, calc and onboarding warnings carry an icon through WarningNotice', () => {
     expect(read('app/(tabs)/calc.tsx')).toMatch(/<WarningNotice testID="calc-fix-entry"/);

@@ -140,6 +140,38 @@ export function StorageBanner() {
 }
 
 /**
+ * A small standing entry for a storage problem that is still there after the card above was dismissed (a failed
+ * save, or stored data that could not be read: writes stay blocked until it is fixed). Shown on Profile, so Retry and
+ * Erase remain reachable. Erase asks for a second tap, like the Erase button in the Data card. While the card
+ * itself is showing it renders nothing, so the two are never on screen together.
+ */
+export function StorageProblem() {
+  const { t, tm } = useI18n();
+  const { error, noticeVisible, readFailed, resetAll, retry } = useApp();
+  const [confirming, setConfirming] = useState(false);
+  if (!error || noticeVisible) return null;
+  return (
+    <WarningNotice framed testID="storage-problem" actions={(
+      <>
+        <SecondaryButton label={t('storage.retry')} onPress={() => { void retry(); }} testID="storage-problem-retry" />
+        {readFailed && !confirming ? (
+          <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => setConfirming(true)} testID="storage-problem-erase" tone="destructive" />
+        ) : null}
+        {readFailed && confirming ? (
+          <>
+            <WarningLine>{t('profile.eraseWarning')}</WarningLine>
+            <PrimaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="storage-problem-erase-confirm" />
+            <SecondaryButton label={t('common.cancel')} onPress={() => setConfirming(false)} />
+          </>
+        ) : null}
+      </>
+    )}>
+      {t('storage.problem')} {tm(error)}
+    </WarningNotice>
+  );
+}
+
+/**
  * An amber warning that is never colour-only: a warning icon and body text in warningText (4.96:1 on white).
  * `framed` is the stand-alone card (outlined in warningText, on the surface colour) used for storage problems;
  * the default is an inline callout with a leading bar, used inside forms. `actions` render under the text.

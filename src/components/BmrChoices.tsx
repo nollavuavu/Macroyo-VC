@@ -36,18 +36,23 @@ export function FormulaPicker({
   plan,
   bodyFatEntered,
   onChange,
+  hideBmr = false,
 }: {
   plan: Pick<MacroPlan, 'formula' | 'formulaNote' | 'bmr'>;
   bodyFatEntered: boolean;
   onChange: (value: BmrFormula) => void;
+  /** True while an input is invalid (Calc, age cleared): the formula and BMR line would be stale, so it is not shown. */
+  hideBmr?: boolean;
 }) {
   const theme = useTheme();
   const { t, tm } = useI18n();
   return (
     <View style={{ gap: theme.spacing.sm }} testID="formula-picker">
-      <AppText variant="caption" color={theme.colors.textSecondary}>
-        {tm(plan.formulaNote)} {t('formula.bmr', { bmr: Math.round(plan.bmr) })}
-      </AppText>
+      {hideBmr ? null : (
+        <AppText variant="caption" color={theme.colors.textSecondary} testID="formula-bmr-line">
+          {tm(plan.formulaNote)} {t('formula.bmr', { bmr: Math.round(plan.bmr) })}
+        </AppText>
+      )}
       {bodyFatEntered ? (
         <Segmented
           value={plan.formula}

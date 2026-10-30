@@ -197,11 +197,10 @@ describe('F-12: over-target rings and bars use the warning fill', () => {
     expect(overTargetFill(theme)).not.toBe(warningBoundary(theme));
     const ring = read('src/components/Ring.tsx');
     expect(ring).toMatch(/const color = over \? overTargetFill\(theme\)/);
-    expect(ring).toMatch(/stroke=\{warningBoundary\(theme\)\}/);
+    expect(ring).toMatch(/stroke=\{warningBoundary\(theme\)\}/); // outline, drawn under the amber fill (see polish4 for the geometry)
     expect(ring).toMatch(/color=\{over \? theme\.colors\.warningText/);
     const trends = read('app/(tabs)/trends.tsx');
-    expect(trends).toMatch(/over=\{overTargetFill\(theme\)\}/);
-    expect(trends).toMatch(/stroke=\{target > 0 && value > target \? overOutline : undefined\}/);
+    expect(trends).toMatch(/overBarPaint\(theme, barWidth\)/); // paint is chosen by theme and bar width (polish4 tests)
   });
 });
 

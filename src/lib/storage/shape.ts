@@ -104,7 +104,7 @@ function recordList(name: string, value: unknown, check: (record: Rec, index: nu
  */
 export function validateStoredData(parsed: unknown): AppData {
   if (!isRecord(parsed)) throw new Error('stored data is not an object');
-  const { profile, logs, bodyStats, language } = parsed;
+  const { profile, logs, bodyStats, language, appearance } = parsed;
   if (profile != null) {
     if (!isRecord(profile)) throw new Error('stored profile is not an object');
     checkProfile(profile);
@@ -117,6 +117,7 @@ export function validateStoredData(parsed: unknown): AppData {
     logs: (logs ?? empty.logs) as AppData['logs'],
     bodyStats: (bodyStats ?? empty.bodyStats) as AppData['bodyStats'],
     ...(isLanguagePref(language) ? { language } : {}),
+    ...(isOneOf(APPEARANCES, appearance) ? { appearance } : {}),
   };
 }
 

@@ -29,15 +29,16 @@ import { formatAmount, formatInputNumber } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import { msg } from '@/src/i18n/msg';
 import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
+import { appearanceOf } from '@/src/lib/storage/prefs';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { eraseThenLeave } from '@/src/lib/reset';
-import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningLine, WarningNotice } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, StorageProblem, SwitchRow, WarningLine, WarningNotice } from '@/src/components/ui';
 
 export default function ProfileScreen() {
   const theme = useTheme();
   const { t, tm, locale } = useI18n();
-  const { data, updateProfile, resetAll, setLanguage, error: storageError } = useApp();
+  const { data, updateProfile, resetAll, setLanguage, setAppearance, error: storageError } = useApp();
   const profile = data.profile;
   const [confirmReset, setConfirmReset] = useState(false);
   const [notice, setNotice] = useState<Msg | null>(null);
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
     return (
       <Screen testID="screen-profile">
         <AppText variant="title">{t('profile.title')}</AppText>
+        <StorageProblem />
         <AppText>{t('profile.finishOnboarding')}</AppText>
       </Screen>
     );
@@ -60,6 +62,7 @@ export default function ProfileScreen() {
   return (
     <Screen testID="screen-profile">
       <AppText variant="title">{t('profile.title')}</AppText>
+      <StorageProblem />
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="section">{t('profile.language')}</AppText>
         <Segmented
@@ -70,8 +73,8 @@ export default function ProfileScreen() {
         <AppText variant="caption" color={theme.colors.textSecondary}>{t('profile.languageHint')}</AppText>
         <AppText variant="section">{t('profile.appearance')}</AppText>
         <Segmented
-          value={profile.appearance}
-          onChange={(appearance) => { void save({ ...profile, appearance }); }}
+          value={appearanceOf(data)}
+          onChange={(appearance) => { void setAppearance(appearance); }}
           options={[
             { value: 'system' as Appearance, label: t('appearance.system') },
             { value: 'light' as Appearance, label: t('appearance.light') },

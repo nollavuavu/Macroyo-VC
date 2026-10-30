@@ -239,7 +239,7 @@ export default function CalcScreen() {
             {plan.implausible && !typedInvalid ? (
               <WarningNotice testID="calc-implausible" variant="caption">{tm(plan.implausible)}</WarningNotice>
             ) : null}
-            <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} />
+            <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={setFormulaOverride} hideBmr={typedInvalid} />
             <GroupLabel>{t('common.sex')}</GroupLabel>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {(['female', 'male', 'unspecified'] as Sex[]).map((option) => (
@@ -276,9 +276,7 @@ export default function CalcScreen() {
             ]}
           />
           {projection.deficit_unavailable ? (
-            <AppText variant="secondary" color={theme.colors.warningText}>
-              {tm(DEFICIT_UNAVAILABLE_MESSAGE)}
-            </AppText>
+            <WarningLine testID="calc-deficit-unavailable">{tm(DEFICIT_UNAVAILABLE_MESSAGE)}</WarningLine>
           ) : (
             <AppText variant="caption" color={theme.colors.textSecondary}>
               {t('calc.maxDeficit', { cap: formatAmount(cap), limit: tm(binding) })}
@@ -322,7 +320,7 @@ export default function CalcScreen() {
                 : <AppText key={warning.code} variant="caption" color={theme.colors.textSecondary}>{tm(warning.message)}</AppText>
             ))}
             {projection.warnings.some((warning) => warning.code === 'SURPLUS_MOSTLY_FAT') ? (
-              <AppText variant="bodyMedium" color={theme.colors.warningText}>{t('calc.mostlyFat')}</AppText>
+              <WarningLine testID="calc-mostly-fat">{t('calc.mostlyFat')}</WarningLine>
             ) : null}
           </Card>
           <Card style={{ gap: theme.spacing.sm }}>

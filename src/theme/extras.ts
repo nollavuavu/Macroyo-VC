@@ -49,6 +49,43 @@ export function overTargetFill(theme: { colors: { warning: string } }): string {
 }
 
 /**
+ * How an over-target ring is stroked. The TOTAL stroke never changes (so crossing the target recolours the ring and
+ * does not resize it, and nothing is clipped by the SVG box): in light mode a full-width `warningText` stroke is
+ * drawn first and a narrower `warning` stroke on top of it, so the rim sits INSIDE the ring's footprint. In dark mode
+ * the fill is already 6.5:1 or more on the track and surface, so there is no outline at all.
+ */
+export function overRingStrokes(theme: Pick<Theme, 'isDark'>, stroke: number): { outline: number | null; fill: number } {
+  if (theme.isDark) return { outline: null, fill: stroke };
+  return { outline: stroke, fill: stroke - borders.emphasis * 2 };
+}
+
+/** Over-target bars narrower than this (viewBox units) do not get an outline: it would be mostly rim. */
+export const OVER_BAR_MIN_OUTLINE_WIDTH = 8;
+
+/**
+ * Paint for an over-target bar. Light and wide enough: `warning` fill inside a `warningText` outline. Light and
+ * narrow: one solid `warningText` bar (4.65:1 or more on the background). Dark: `warning` fill, no outline.
+ */
+export function overBarPaint(
+  theme: { isDark: boolean; colors: { warning: string; warningText: string } },
+  barWidth: number,
+): { fill: string; outline: string | null } {
+  if (theme.isDark) return { fill: overTargetFill(theme), outline: null };
+  if (barWidth < OVER_BAR_MIN_OUTLINE_WIDTH) return { fill: warningBoundary(theme), outline: null };
+  return { fill: overTargetFill(theme), outline: warningBoundary(theme) };
+}
+
+/** A rectangle shrunk by `inset` on every side (never below zero size): the fill inside an outline rect. */
+export function insetRect(rect: { x: number; y: number; width: number; height: number }, inset: number) {
+  return {
+    x: rect.x + inset,
+    y: rect.y + inset,
+    width: Math.max(0, rect.width - inset * 2),
+    height: Math.max(0, rect.height - inset * 2),
+  };
+}
+
+/**
  * Where the floating action button sits and how much room the scroll content must leave under it.
  * The tab bar is laid out by the navigator, so a tab screen already ends above the bar and its inset: the button
  * only needs `spacing.lg` of its own margin (counting the bar height and the inset again floated it ~76 px too

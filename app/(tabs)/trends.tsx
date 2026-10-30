@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import { addDays, friendlyDate, localDateISO, shortDate, weekdayNarrow } from '@/src/lib/dates';
+import { displayKcal } from '@/src/lib/domain';
 import { formatAmount, formatFixed, formatKcal } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import { mean, trailingAverage } from '@/src/lib/stats';
-import { borders, borderStrong, overTargetFill, warningBoundary } from '@/src/theme/extras';
+import { borders, borderStrong, insetRect, overBarPaint } from '@/src/theme/extras';
 import { chartTextProps } from '@/src/theme/chartText';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { AppText, Card, Screen, Segmented } from '@/src/components/ui';
@@ -31,7 +32,7 @@ export default function TrendsScreen() {
   }, [cutoff, range, today]);
   const calories = days.map((iso) => ({
     date: iso,
-    kcal: data.logs.filter((entry) => entry.date === iso).reduce((sum, entry) => sum + entry.kcal, 0),
+    kcal: data.logs.filter((entry) => entry.date === iso).reduce((sum, entry) => sum + displayKcal(entry.kcal), 0),
   }));
   const target = data.profile?.targets.kcal ?? 0;
   const maxCal = Math.max(target, ...calories.map((day) => day.kcal), 1);
@@ -94,8 +95,6 @@ export default function TrendsScreen() {
             target={target}
             max={maxCal}
             fill={theme.colors.primary}
-            over={overTargetFill(theme)}
-            overOutline={warningBoundary(theme)}
             grid={theme.colors.border}
             axis={borderStrong(theme)}
             text={theme.colors.textSecondary}
@@ -204,8 +203,6 @@ function CalorieBars({
   target,
   max,
   fill,
-  over,
-  overOutline,
   grid,
   axis,
   text,
@@ -216,20 +213,19 @@ function CalorieBars({
   target: number;
   max: number;
   fill: string;
-  over: string;
-  /** Darker outline on over-target bars: the amber fill alone is under 3:1 on white. */
-  overOutline: string;
   grid: string;
   axis: string;
   text: string;
   line: string;
 }) {
   const { t } = useI18n();
-  const labelProps = chartTextProps(useTheme());
+  const theme = useTheme();
+  const labelProps = chartTextProps(theme);
   const gap = 4;
   const plotW = CHART_W - PAD_L - PAD_R;
   const plotH = CHART_H - PAD_T - PAD_B;
   const barWidth = Math.max(4, (plotW - gap * (values.length - 1)) / values.length);
+  const paint = overBarPaint(theme, barWidth);
   const yAt = (value: number) => PAD_T + plotH - (value / max) * plotH;
   const avg = averageLogged(values);
   const labelEvery = values.length <= 7 ? 1 : Math.ceil(values.length / 6);
@@ -250,9 +246,19 @@ function CalorieBars({
         const x = PAD_L + index * (barWidth + gap);
         const barHeight = Math.max(0, (value / max) * plotH);
         const label = index % labelEvery === 0 ? (values.length <= 7 ? weekdayNarrow(dates[index]) : shortDate(dates[index])) : null;
+        const bar = { x, y: PAD_T + plotH - barHeight, width: barWidth, height: barHeight };
+        const isOver = target > 0 && value > target;
         return (
           <G key={index}>
-            <Rect x={x} y={PAD_T + plotH - barHeight} width={barWidth} height={barHeight} rx="3" fill={target > 0 && value > target ? over : fill} stroke={target > 0 && value > target ? overOutline : undefined} strokeWidth={target > 0 && value > target ? borders.emphasis : undefined} />
+            {isOver ? (
+              <>
+                {paint.outline ? <Rect {...bar} rx="3" fill={paint.outline} /> : null}
+                {/* The outline is the bar's own outer edge; the fill sits inside it, so the footprint never grows. */}
+                <Rect {...(paint.outline ? insetRect(bar, borders.emphasis) : bar)} rx={paint.outline ? '1.5' : '3'} fill={paint.fill} />
+              </>
+            ) : (
+              <Rect {...bar} rx="3" fill={fill} />
+            )}
             {label ? (
               <SvgText x={x + barWidth / 2} y={CHART_H - 8} {...labelProps} fill={text} textAnchor="middle">{label}</SvgText>
             ) : null}

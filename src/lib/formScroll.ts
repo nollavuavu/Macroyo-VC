@@ -13,6 +13,7 @@ type Scrollable = { scrollTo: (options: { x?: number; y?: number; animated?: boo
 export function useFormScroll<K extends string>(scrollRef: RefObject<Scrollable | null>, margin: number, delayMs = 60) {
   const groups = useRef<Record<string, ScrollGroup | undefined>>({});
   const fields = useRef<Partial<Record<K, { y: number; group?: string }>>>({});
+  const revealed = useRef<Set<string>>(new Set());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -27,7 +28,16 @@ export function useFormScroll<K extends string>(scrollRef: RefObject<Scrollable 
       }, delayMs);
       return true;
     };
+    // A warning's onLayout fires again on rotation, font-scale changes and so on. Scroll once per appearance: the
+    // key is remembered until the screen calls `forget` (when the warning goes away).
+    const revealOnce = (key: K): boolean => {
+      if (revealed.current.has(key)) return false;
+      revealed.current.add(key);
+      return reveal(key);
+    };
     return {
+      revealOnce,
+      forget: (key: K) => { revealed.current.delete(key); },
       group: (name: string, parent?: string) => (event: LayoutChangeEvent) => {
         groups.current[name] = { y: event.nativeEvent.layout.y, parent };
       },
