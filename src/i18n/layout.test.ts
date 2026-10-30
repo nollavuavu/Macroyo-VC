@@ -19,7 +19,9 @@ describe('P1-1 Vietnamese line heights', () => {
     expect(vit.section.lineHeight).toBe(29);
     expect(vit.secondary.lineHeight).toBe(22);
     expect(vit.caption.lineHeight).toBe(18);
-    expect(VI_LINE_HEIGHTS).toEqual({ title: 40, section: 29, secondary: 22, caption: 18 });
+    expect(vit.bodyMedium.lineHeight).toBe(26);
+    expect(vit.macroGrams.lineHeight).toBe(22);
+    expect(VI_LINE_HEIGHTS).toEqual({ title: 40, section: 29, bodyMedium: 26, secondary: 22, macroGrams: 22, caption: 18 });
     for (const key of Object.keys(typography) as (keyof typeof typography)[]) {
       expect(vit[key].fontSize, key).toBe(typography[key].fontSize);
       expect(vit[key].fontFamily, key).toBe(typography[key].fontFamily);
@@ -62,10 +64,9 @@ describe('P1-3 / P1-4 / P1-5 component rules (source checks)', () => {
   it('tab labels do not scale with system font size', () => {
     expect(read('app/(tabs)/_layout.tsx')).toContain('tabBarAllowFontScaling: false');
   });
-  it('Segmented and Chip labels are one line and shrink to 80% instead of breaking mid-word', () => {
-    expect(ui).toMatch(/numberOfLines=\{fit \? 1 : numberOfLines\}/);
-    expect(ui).toContain('adjustsFontSizeToFit={fit}');
-    expect(ui).toContain('minimumFontScale={fit ? 0.8 : undefined}');
+  it('Segmented and Chip labels are one line and shrink to 80% on native, two lines on web (see polish3)', () => {
+    expect(ui).toContain('...(fit ? fitTextProps(Platform.OS) : { numberOfLines })');
+    expect(read('src/lib/fitLabel.ts')).toContain('adjustsFontSizeToFit: true, minimumFontScale: FIT_MIN_SCALE');
     const segmented = ui.slice(ui.indexOf('export function Segmented'), ui.indexOf('export function Field'));
     expect(segmented).toMatch(/<AppText variant="secondary" fit /);
     const chip = ui.slice(ui.indexOf('export function Chip'), ui.indexOf('export function Chip') + 2500);

@@ -32,7 +32,7 @@ import type { Msg } from '@/src/i18n/types';
 import { msg } from '@/src/i18n/msg';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { FormulaPicker, SexConstantPicker } from '@/src/components/BmrChoices';
-import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, Segmented, WarningNotice } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, Segmented, WarningLine, WarningNotice } from '@/src/components/ui';
 
 type Mode = 'bmi' | 'ffmi' | 'calories';
 type Direction = 'deficit' | 'surplus';
@@ -182,7 +182,7 @@ export default function CalcScreen() {
             maximumTrackTintColor={theme.colors.border}
             thumbTintColor={theme.colors.primary}
           />
-          {fatError ? <AppText variant="caption" color={theme.colors.warningText}>{tm(fatError)}</AppText> : null}
+          {fatError ? <WarningLine>{tm(fatError)}</WarningLine> : null}
           <Chip label={t('calc.notSure')} selected={bodyFat == null} onPress={() => setBodyFat(null)} />
         </Card>
       ) : null}
@@ -301,14 +301,10 @@ export default function CalcScreen() {
             placeholder={t('calc.customPlaceholder')}
           />
           {customText.trim() && !parsedCustom.valid ? (
-            <AppText variant="caption" color={theme.colors.warningText}>
-              {t('calc.customInvalid', { message: parsedCustom.message ? tm(parsedCustom.message) : '' })}
-            </AppText>
+            <WarningLine>{t('calc.customInvalid', { message: parsedCustom.message ? tm(parsedCustom.message) : '' })}</WarningLine>
           ) : null}
           {direction === 'deficit' && !projection.deficit_unavailable && customText && parsedCustom.valid && parsedCustom.magnitude > cap ? (
-            <AppText variant="caption" color={theme.colors.warningText}>
-              {t('calc.capApplied', { cap: formatAmount(cap) })}
-            </AppText>
+            <WarningLine>{t('calc.capApplied', { cap: formatAmount(cap) })}</WarningLine>
           ) : null}
           <Card style={{ gap: theme.spacing.sm }}>
             <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.targetIntake')}</AppText>
@@ -317,9 +313,9 @@ export default function CalcScreen() {
               {t('calc.effectiveOffset', { offset: formatSigned(projection.effective_offset_kcal, 0), pct: formatAmount(projection.pct_bw_per_week) })}
             </AppText>
             {projection.warnings.map((warning) => (
-              <AppText key={warning.code} variant="caption" color={warning.code === 'SURPLUS_MOSTLY_FAT' ? theme.colors.warningText : theme.colors.textSecondary}>
-                {tm(warning.message)}
-              </AppText>
+              warning.code === 'SURPLUS_MOSTLY_FAT'
+                ? <WarningLine key={warning.code}>{tm(warning.message)}</WarningLine>
+                : <AppText key={warning.code} variant="caption" color={theme.colors.textSecondary}>{tm(warning.message)}</AppText>
             ))}
             {projection.warnings.some((warning) => warning.code === 'SURPLUS_MOSTLY_FAT') ? (
               <AppText variant="bodyMedium" color={theme.colors.warningText}>{t('calc.mostlyFat')}</AppText>

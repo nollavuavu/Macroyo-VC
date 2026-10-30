@@ -1,7 +1,7 @@
 import Svg, { Circle } from 'react-native-svg';
 import { View } from 'react-native';
 import { AppText } from './ui';
-import { warningBoundary } from '../theme/extras';
+import { borders, overTargetFill, warningBoundary } from '../theme/extras';
 import { useTheme } from '../state/AppContext';
 import { useI18n } from '../i18n/react';
 import { formatKcal, withUnit } from '../lib/format';
@@ -18,7 +18,10 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
   const shown = remainingDisplay(consumed, target);
   const ratio = shown.target > 0 ? shown.consumed / shown.target : 0;
   const over = shown.target > 0 && shown.kind === 'over';
-  const color = over ? warningBoundary(theme) : theme.colors.primary;
+  // Over target the arc takes the amber fill with a darker outline (the fill alone is under 3:1 on white);
+  // warningText stays for the text below.
+  const color = over ? overTargetFill(theme) : theme.colors.primary;
+  const outline = over ? borders.emphasis : 0;
   const dash = target > 0 ? Math.min(1, Math.max(0, ratio)) * circumference : 0;
   return (
     <View
@@ -30,6 +33,18 @@ export function CalorieRing({ consumed, target }: { consumed: number; target: nu
         <View style={{ transform: [{ rotate: '-90deg' }] }}>
           <Svg width={size} height={size}>
             <Circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.colors.border} strokeWidth={stroke} fill="none" />
+            {dash > 0 && over ? (
+              <Circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                stroke={warningBoundary(theme)}
+                strokeWidth={stroke + outline * 2}
+                fill="none"
+                strokeDasharray={`${dash} ${circumference}`}
+                strokeLinecap="round"
+              />
+            ) : null}
             {dash > 0 ? (
               <Circle
                 cx={size / 2}

@@ -5,7 +5,7 @@ import { addDays, friendlyDate, localDateISO, shortDate, weekdayNarrow } from '@
 import { formatAmount, formatFixed, formatKcal } from '@/src/lib/format';
 import { useI18n } from '@/src/i18n/react';
 import { mean, trailingAverage } from '@/src/lib/stats';
-import { borderStrong, warningBoundary } from '@/src/theme/extras';
+import { borders, borderStrong, overTargetFill, warningBoundary } from '@/src/theme/extras';
 import { chartTextProps } from '@/src/theme/chartText';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { AppText, Card, Screen, Segmented } from '@/src/components/ui';
@@ -94,7 +94,8 @@ export default function TrendsScreen() {
             target={target}
             max={maxCal}
             fill={theme.colors.primary}
-            over={warningBoundary(theme)}
+            over={overTargetFill(theme)}
+            overOutline={warningBoundary(theme)}
             grid={theme.colors.border}
             axis={borderStrong(theme)}
             text={theme.colors.textSecondary}
@@ -204,6 +205,7 @@ function CalorieBars({
   max,
   fill,
   over,
+  overOutline,
   grid,
   axis,
   text,
@@ -215,6 +217,8 @@ function CalorieBars({
   max: number;
   fill: string;
   over: string;
+  /** Darker outline on over-target bars: the amber fill alone is under 3:1 on white. */
+  overOutline: string;
   grid: string;
   axis: string;
   text: string;
@@ -248,7 +252,7 @@ function CalorieBars({
         const label = index % labelEvery === 0 ? (values.length <= 7 ? weekdayNarrow(dates[index]) : shortDate(dates[index])) : null;
         return (
           <G key={index}>
-            <Rect x={x} y={PAD_T + plotH - barHeight} width={barWidth} height={barHeight} rx="3" fill={target > 0 && value > target ? over : fill} />
+            <Rect x={x} y={PAD_T + plotH - barHeight} width={barWidth} height={barHeight} rx="3" fill={target > 0 && value > target ? over : fill} stroke={target > 0 && value > target ? overOutline : undefined} strokeWidth={target > 0 && value > target ? borders.emphasis : undefined} />
             {label ? (
               <SvgText x={x + barWidth / 2} y={CHART_H - 8} {...labelProps} fill={text} textAnchor="middle">{label}</SvgText>
             ) : null}

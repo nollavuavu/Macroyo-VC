@@ -2,14 +2,15 @@ import { Calculator, House, TrendingUp, UserRound, Utensils } from 'lucide-react
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import type { ColorValue } from 'react-native';
 import type { TabRoute } from '../lib/tabs';
+import { icons, strokes } from '../theme/extras';
 
 /**
  * Tab bar icon. Inactive: the outline icon. Active: a filled icon, for every tab.
  * Lucide fills House, Utensils and UserRound cleanly. Calculator and TrendingUp would lose their detail
  * (keys, the line) under a plain fill, so their active forms are drawn here with the detail cut out in `knockout`.
  */
-export function TabIcon({ route, color, focused, knockout, size = 22 }: { route: TabRoute; color: ColorValue; focused: boolean; knockout: string; size?: number }) {
-  const strokeWidth = focused ? 2.6 : 2;
+export function TabIcon({ route, color, focused, knockout, size = icons.nav }: { route: TabRoute; color: ColorValue; focused: boolean; knockout: string; size?: number }) {
+  const strokeWidth = focused ? strokes.tabActive : strokes.regular;
   const fill = focused ? color : 'none';
   if (route === 'index') return <House color={color} size={size} strokeWidth={strokeWidth} fill={fill} />;
   if (route === 'log') return <Utensils color={color} size={size} strokeWidth={strokeWidth} fill={fill} />;
@@ -29,8 +30,8 @@ export function TabIcon({ route, color, focused, knockout, size = 22 }: { route:
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24" testID="tab-icon-trends-filled">
         <Path d="M2.5 18 9 11.5l4 4L21.5 7v13.5h-19z" fill={color} />
-        <Path d="M2.5 18 9 11.5l4 4L21.5 7" fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M16 7h5.5v5.5" fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M2.5 18 9 11.5l4 4L21.5 7" fill="none" stroke={color} strokeWidth={strokes.tabActive} strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M16 7h5.5v5.5" fill="none" stroke={color} strokeWidth={strokes.tabActive} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     );
   }

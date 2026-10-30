@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import {
@@ -20,11 +20,17 @@ import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { MacroTokens } from '@/src/components/MacroTokens';
-import { borderStrong } from '@/src/theme/extras';
-import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, WarningNotice, useDebounced, type Scroller } from '@/src/components/ui';
-import { scrollTargetY } from '@/src/lib/scroll';
+import { borders, borderStrong, icons, marks, strokes } from '@/src/theme/extras';
+import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, WarningLine, WarningNotice, useDebounced, type Scroller } from '@/src/components/ui';
+import { errorKeys } from '@/src/lib/scroll';
+import { useFormScroll } from '@/src/lib/formScroll';
 
 const foods = loadFoods();
+
+/** Fields in screen order, for scrolling to the first invalid one when Save is blocked. */
+const FORM_FIELDS = ['name', 'kcal', 'proteinG', 'carbsG', 'fatG', 'fiberG', 'grams'] as const;
+const PORTION_ORDER = ['portion.name', 'portion.grams', 'portion.kcal', 'portion.proteinG', 'portion.carbsG', 'portion.fatG', 'portion.fiberG'];
+const QUICK_ORDER = FORM_FIELDS.map((field) => `quick.${field}`);
 
 interface EditFields {
   name: string;
@@ -75,11 +81,8 @@ export default function LogScreen() {
   const [editWarning, setEditWarning] = useState<Msg | null>(null);
   // A warning appears at the bottom of a tall card: scroll it into view so Save never seems to do nothing.
   const scrollRef = useRef<Scroller>(null);
-  const portionCardY = useRef(0);
-  const quickCardY = useRef(0);
-  const revealWarning = (cardY: number, event: LayoutChangeEvent) => {
-    scrollRef.current?.scrollTo({ y: scrollTargetY(cardY, event.nativeEvent.layout.y, theme.spacing.xxl), animated: true });
-  };
+  // The same hook scrolls to the first invalid field when Save is blocked, in screen order, and to a confirm warning.
+  const form = useFormScroll<string>(scrollRef, theme.spacing.xxl);
 
   const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
   const results = allResults.slice(0, shown);
@@ -108,6 +111,7 @@ export default function LogScreen() {
     const check = validatePortionGrams(grams);
     if (!check.ok || grams == null) {
       setFormError(check.message);
+      form.reveal('portion.grams');
       return;
     }
     if (editing) {
@@ -172,6 +176,7 @@ export default function LogScreen() {
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       setEditWarning(null);
+      form.revealFirst(PORTION_ORDER, errorKeys('portion', errors));
       return;
     }
     if (decision.action === 'confirm') {
@@ -226,6 +231,7 @@ export default function LogScreen() {
       setQuickErrors(errors);
       setFormError(null);
       setQuickWarning(null);
+      form.revealFirst(QUICK_ORDER, errorKeys('quick', errors));
       return;
     }
     if (decision.action === 'confirm') {
@@ -278,7 +284,7 @@ export default function LogScreen() {
     width: theme.sizes.minTouchTarget,
     height: theme.sizes.minTouchTarget,
     borderRadius: theme.sizes.minTouchTarget / 2,
-    borderWidth: 1,
+    borderWidth: borders.thin,
     borderColor: borderStrong(theme),
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -294,28 +300,28 @@ export default function LogScreen() {
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Pressable accessibilityRole="button" accessibilityLabel={t('log.previousDay')} onPress={() => setDate(addDays(date, -1))} style={dayButtonStyle}>
-          <ChevronLeft color={theme.colors.primary} size={22} strokeWidth={2.2} />
+          <ChevronLeft color={theme.colors.primary} size={icons.nav} strokeWidth={strokes.nav} />
         </Pressable>
         <AppText variant="bodyMedium">{friendlyDate(date)}</AppText>
         <Pressable accessibilityRole="button" accessibilityLabel={t('log.nextDay')} onPress={() => setDate(addDays(date, 1))} style={dayButtonStyle}>
-          <ChevronRight color={theme.colors.primary} size={22} strokeWidth={2.2} />
+          <ChevronRight color={theme.colors.primary} size={icons.nav} strokeWidth={strokes.nav} />
         </Pressable>
       </View>
 
       <Field label={t('log.searchFoods')} accessibilityLabel={t('log.searchFoods')} value={query} onChangeText={setQuery} keyboard="default" placeholder={t('log.searchPlaceholder')} />
 
       {selected || editing ? (
-        <View onLayout={(event) => { portionCardY.current = event.nativeEvent.layout.y; }}>
-        <Card style={{ gap: theme.spacing.md }}>
+        <View onLayout={form.group('portion')}>
+        <Card style={{ gap: theme.spacing.md }} onLayout={form.group('portionCard', 'portion')}>
           <AppText variant="section">{editing ? editing.name : selected?.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {editing ? t('log.editingEntry') : t('log.kcalPer100', { kcal: formatAmount(selected?.kcalPer100g ?? 0, 0) })}
             {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${withUnit(formatAmount(selected.servingSizeG), 'g')})` : ''}
           </AppText>
           {editing && edit ? (
-            <Field label={t('common.name')} value={edit.name} onChangeText={(value) => { setEdit({ ...edit, name: value }); setEditErrors((current) => withoutFieldError(current, 'name')); }} error={text(editErrors.name)} keyboard="default" />
+            <Field label={t('common.name')} value={edit.name} onChangeText={(value) => { setEdit({ ...edit, name: value }); setEditErrors((current) => withoutFieldError(current, 'name')); }} error={text(editErrors.name)} keyboard="default" onLayout={form.field('portion.name', 'portionCard')} />
           ) : null}
-          <Field label={t('log.grams')} value={gramsText} onChangeText={(value) => { setGramsText(value); setFormError(null); setEditErrors((current) => withoutFieldError(current, 'grams')); }} suffix="g" error={text(formError ?? editErrors.grams)} />
+          <Field label={t('log.grams')} value={gramsText} onChangeText={(value) => { setGramsText(value); setFormError(null); setEditErrors((current) => withoutFieldError(current, 'grams')); }} suffix="g" error={text(formError ?? editErrors.grams)} onLayout={form.field('portion.grams', 'portionCard')} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
               <Chip label={selected.servingLabel ?? t('log.serving')} detail={withUnit(formatAmount(selected.servingSizeG), 'g')} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
@@ -332,23 +338,23 @@ export default function LogScreen() {
             </View>
           ) : null}
           {editing && edit ? (
-            <View style={{ gap: theme.spacing.md }}>
+            <View onLayout={form.group('portionMacros', 'portionCard')} style={{ gap: theme.spacing.md }}>
               {(() => {
                 const shown = editedMacros();
                 return (
                   <>
-                    <Field label={t('common.calories')} value={shown.kcal} onChangeText={(value) => changeEdit('kcal', value)} error={text(editErrors.kcal)} suffix="kcal" />
-                    <Field label={t('macro.protein')} value={shown.protein} onChangeText={(value) => changeEdit('protein', value)} error={text(editErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" />
-                    <Field label={t('macro.carbs')} value={shown.carbs} onChangeText={(value) => changeEdit('carbs', value)} error={text(editErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" />
-                    <Field label={t('macro.fat')} value={shown.fat} onChangeText={(value) => changeEdit('fat', value)} error={text(editErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" />
-                    <Field label={t('log.fiberBlank')} value={shown.fiber} onChangeText={(value) => changeEdit('fiber', value)} error={text(editErrors.fiberG)} suffix="g" />
+                    <Field label={t('common.calories')} value={shown.kcal} onChangeText={(value) => changeEdit('kcal', value)} error={text(editErrors.kcal)} suffix="kcal" onLayout={form.field('portion.kcal', 'portionMacros')} />
+                    <Field label={t('macro.protein')} value={shown.protein} onChangeText={(value) => changeEdit('protein', value)} error={text(editErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" onLayout={form.field('portion.proteinG', 'portionMacros')} />
+                    <Field label={t('macro.carbs')} value={shown.carbs} onChangeText={(value) => changeEdit('carbs', value)} error={text(editErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" onLayout={form.field('portion.carbsG', 'portionMacros')} />
+                    <Field label={t('macro.fat')} value={shown.fat} onChangeText={(value) => changeEdit('fat', value)} error={text(editErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" onLayout={form.field('portion.fatG', 'portionMacros')} />
+                    <Field label={t('log.fiberBlank')} value={shown.fiber} onChangeText={(value) => changeEdit('fiber', value)} error={text(editErrors.fiberG)} suffix="g" onLayout={form.field('portion.fiberG', 'portionMacros')} />
                   </>
                 );
               })()}
             </View>
           ) : null}
           {editing && editWarning ? (
-            <WarningNotice testID="edit-warning" onLayout={(event) => revealWarning(portionCardY.current, event)}>
+            <WarningNotice testID="edit-warning" onLayout={(event) => { form.field('portion.warning', 'portionCard')(event); form.reveal('portion.warning'); }}>
               {tm(editWarning)} {t('log.fixOrSave')}
             </WarningNotice>
           ) : null}
@@ -364,19 +370,19 @@ export default function LogScreen() {
 
       <Chip label={quick ? t('log.hideQuickAdd') : t('log.quickAdd')} selected={quick} onPress={() => { setQuick((value) => !value); setSelected(null); setEditing(null); }} />
       {quick ? (
-        <View onLayout={(event) => { quickCardY.current = event.nativeEvent.layout.y; }}>
-        <Card style={{ gap: theme.spacing.md }}>
+        <View onLayout={form.group('quick')}>
+        <Card style={{ gap: theme.spacing.md }} onLayout={form.group('quickCard', 'quick')}>
           <AppText variant="section">{t('log.quickAdd')}</AppText>
-          <Field label={t('common.name')} value={quickName} onChangeText={quickInput('name', setQuickName)} error={text(quickErrors.name)} keyboard="default" placeholder={t('log.quickNamePlaceholder')} />
-          <Field label={t('common.calories')} value={quickKcal} onChangeText={quickInput('kcal', setQuickKcal)} error={text(quickErrors.kcal)} suffix="kcal" />
-          <Field label={t('macro.protein')} value={quickP} onChangeText={quickInput('proteinG', setQuickP)} error={text(quickErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" />
-          <Field label={t('macro.carbs')} value={quickC} onChangeText={quickInput('carbsG', setQuickC)} error={text(quickErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" />
-          <Field label={t('macro.fat')} value={quickF} onChangeText={quickInput('fatG', setQuickF)} error={text(quickErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" />
-          <Field label={t('log.fiberBlank')} value={quickFiber} onChangeText={quickInput('fiberG', setQuickFiber)} error={text(quickErrors.fiberG)} suffix="g" />
-          <Field label={t('log.portion')} value={quickGrams} onChangeText={quickInput('grams', setQuickGrams)} error={text(quickErrors.grams)} suffix="g" />
-          {formError ? <AppText variant="caption" color={theme.colors.warningText}>{tm(formError)}</AppText> : null}
+          <Field label={t('common.name')} value={quickName} onChangeText={quickInput('name', setQuickName)} error={text(quickErrors.name)} keyboard="default" placeholder={t('log.quickNamePlaceholder')} onLayout={form.field('quick.name', 'quickCard')} />
+          <Field label={t('common.calories')} value={quickKcal} onChangeText={quickInput('kcal', setQuickKcal)} error={text(quickErrors.kcal)} suffix="kcal" onLayout={form.field('quick.kcal', 'quickCard')} />
+          <Field label={t('macro.protein')} value={quickP} onChangeText={quickInput('proteinG', setQuickP)} error={text(quickErrors.proteinG)} labelColor={theme.macroColors.protein} suffix="g" onLayout={form.field('quick.proteinG', 'quickCard')} />
+          <Field label={t('macro.carbs')} value={quickC} onChangeText={quickInput('carbsG', setQuickC)} error={text(quickErrors.carbsG)} labelColor={theme.macroColors.carbs} suffix="g" onLayout={form.field('quick.carbsG', 'quickCard')} />
+          <Field label={t('macro.fat')} value={quickF} onChangeText={quickInput('fatG', setQuickF)} error={text(quickErrors.fatG)} labelColor={theme.macroColors.fat} suffix="g" onLayout={form.field('quick.fatG', 'quickCard')} />
+          <Field label={t('log.fiberBlank')} value={quickFiber} onChangeText={quickInput('fiberG', setQuickFiber)} error={text(quickErrors.fiberG)} suffix="g" onLayout={form.field('quick.fiberG', 'quickCard')} />
+          <Field label={t('log.portion')} value={quickGrams} onChangeText={quickInput('grams', setQuickGrams)} error={text(quickErrors.grams)} suffix="g" onLayout={form.field('quick.grams', 'quickCard')} />
+          {formError ? <WarningLine>{tm(formError)}</WarningLine> : null}
           {quickWarning ? (
-            <WarningNotice testID="quick-warning" onLayout={(event) => revealWarning(quickCardY.current, event)}>
+            <WarningNotice testID="quick-warning" onLayout={(event) => { form.field('quick.warning', 'quickCard')(event); form.reveal('quick.warning'); }}>
               {tm(quickWarning)} {t('log.fixOrSave')}
             </WarningNotice>
           ) : null}
@@ -399,7 +405,7 @@ export default function LogScreen() {
             <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" accessibilityLabel={t('log.resultLabel', { name: food.name, kcal: formatKcal(food.kcalPer100g) })} style={{
               backgroundColor: theme.colors.surface,
               borderRadius: theme.radii.card,
-              borderWidth: 1,
+              borderWidth: borders.thin,
               borderColor: theme.colors.border,
               padding: theme.spacing.md,
               flexDirection: 'row',
@@ -416,8 +422,8 @@ export default function LogScreen() {
                 </AppText>
                 <MacroTokens protein={food.proteinPer100g} carbs={food.carbsPer100g} fat={food.fatPer100g} digits={1} />
               </View>
-              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' }}>
-                <Plus color={theme.colors.onAccent} size={18} strokeWidth={2.4} />
+              <View style={{ width: marks.addCircle, height: marks.addCircle, borderRadius: marks.addCircle / 2, backgroundColor: theme.colors.accent, alignItems: 'center', justifyContent: 'center' }}>
+                <Plus color={theme.colors.onAccent} size={icons.sm} strokeWidth={strokes.bold} />
               </View>
             </Pressable>
           ))}
@@ -442,7 +448,7 @@ export default function LogScreen() {
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
             <SecondaryButton label={t('common.edit')} onPress={() => openEdit(entry)} />
             <Pressable accessibilityRole="button" accessibilityLabel={t('log.deleteLabel', { name: entry.name })} onPress={() => remove(entry)} style={{ minHeight: theme.sizes.minTouchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm }}>
-              <Trash2 color={theme.colors.warningText} size={20} />
+              <Trash2 color={theme.colors.warningText} size={icons.md} />
             </Pressable>
           </View>
         </Card>

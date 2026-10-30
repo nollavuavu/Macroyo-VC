@@ -196,9 +196,9 @@ export const typography = {
 /**
  * Vietnamese stacks tone marks above the letter (Ấ Ẳ Ế Ặ), which rise above the font's ascender line.
  * Android clips anything outside a fixed lineHeight box, so these styles get a taller line in Vietnamese only.
- * Sizes, weights and every other style are unchanged. Measured overhang: title 2.8 px, section 1.1, secondary 0.4, caption 0.9.
+ * Sizes, weights and every other style are unchanged. Measured overhang: title 2.8 px, section 1.1, secondary 0.4, caption 0.9; bodyMedium and macroGrams get the same proportion as their neighbours (16/26 like 14/22).
  */
-export const VI_LINE_HEIGHTS = { title: 40, section: 29, secondary: 22, caption: 18 } as const;
+export const VI_LINE_HEIGHTS = { title: 40, section: 29, bodyMedium: 26, secondary: 22, macroGrams: 22, caption: 18 } as const;
 
 /** Typography for a language. Only 'vi' differs (taller lines); everything else is the base set. */
 export function typographyFor(locale: string | null | undefined): Record<TypographyKey, TextStyleToken> {
@@ -207,7 +207,9 @@ export function typographyFor(locale: string | null | undefined): Record<Typogra
     ...typography,
     title: { ...typography.title, lineHeight: VI_LINE_HEIGHTS.title },
     section: { ...typography.section, lineHeight: VI_LINE_HEIGHTS.section },
+    bodyMedium: { ...typography.bodyMedium, lineHeight: VI_LINE_HEIGHTS.bodyMedium },
     secondary: { ...typography.secondary, lineHeight: VI_LINE_HEIGHTS.secondary },
+    macroGrams: { ...typography.macroGrams, lineHeight: VI_LINE_HEIGHTS.macroGrams },
     caption: { ...typography.caption, lineHeight: VI_LINE_HEIGHTS.caption },
   };
 }

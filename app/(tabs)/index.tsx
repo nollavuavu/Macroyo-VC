@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Drumstick, Droplets, Plus, Wheat } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { borderStrong } from '@/src/theme/extras';
 import { progressRatio, roundToSum, sumLogged } from '@/src/lib/domain';
 import { MEALS, MEAL_KEY, addDays, dayAccessibilityLabel, formatLongDate, weekDates, weekdayNarrow, type Meal } from '@/src/lib/dates';
@@ -15,7 +14,7 @@ import { msg } from '@/src/i18n/msg';
 import type { Msg } from '@/src/i18n/types';
 import { AppText, Card, ProgressTrack, Screen, SecondaryButton } from '@/src/components/ui';
 import { CalorieRing } from '@/src/components/Ring';
-import { fabGeometry, marks } from '@/src/theme/extras';
+import { borders, fabGeometry, icons, marks, strokes } from '@/src/theme/extras';
 
 const MACRO_ICON = {
   protein: Drumstick,
@@ -26,7 +25,6 @@ const MACRO_ICON = {
 export default function TodayScreen() {
   const theme = useTheme();
   const { t, tm } = useI18n();
-  const insets = useSafeAreaInsets();
   const { data, addLog, selectedDate: date, setSelectedDate: setDate } = useApp();
   const profile = data.profile;
   const [toast, setToast] = useState<Msg | null>(null);
@@ -115,7 +113,7 @@ export default function TodayScreen() {
             return (
               <View key={key} style={{ gap: theme.spacing.xs }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-                  <Icon color={fill} size={18} strokeWidth={2} />
+                  <Icon color={fill} size={icons.sm} strokeWidth={strokes.regular} />
                   <AppText variant="bodyMedium" style={{ flex: 1 }}>{t(`macro.${key}`)}</AppText>
                   <AppText variant="macroGrams" color={text}>{`${formatAmount(consumed, 0)} / ${withUnit(formatAmount(target, 0), 'g')}${target > 0 ? `${NBSP}· ${formatPercent(ratio)}` : ''}`}</AppText>
                 </View>
@@ -175,13 +173,13 @@ export default function TodayScreen() {
                     width: theme.sizes.minTouchTarget,
                     height: theme.sizes.minTouchTarget,
                     borderRadius: theme.sizes.minTouchTarget / 2,
-                    borderWidth: 1,
+                    borderWidth: borders.thin,
                     borderColor: borderStrong(theme),
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Plus color={theme.colors.primary} size={20} strokeWidth={2.4} />
+                  <Plus color={theme.colors.primary} size={icons.md} strokeWidth={strokes.bold} />
                 </Pressable>
               </Card>
             );
@@ -196,7 +194,7 @@ export default function TodayScreen() {
         style={{
           position: 'absolute',
           right: theme.spacing.lg,
-          bottom: fabGeometry(theme, insets.bottom).bottom,
+          bottom: fabGeometry(theme).bottom,
           width: theme.sizes.fab,
           height: theme.sizes.fab,
           borderRadius: theme.sizes.fab / 2,
@@ -206,7 +204,7 @@ export default function TodayScreen() {
           ...theme.shadows.floating,
         }}
       >
-        <Plus color={theme.colors.onAccent} size={28} strokeWidth={2.4} />
+        <Plus color={theme.colors.onAccent} size={icons.fab} strokeWidth={strokes.bold} />
       </Pressable>
     </View>
   );

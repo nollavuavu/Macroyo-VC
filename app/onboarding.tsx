@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Image, useWindowDimensions, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import {
@@ -29,10 +29,17 @@ import { useI18n } from '@/src/i18n/react';
 import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
 import type { Profile } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
-import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningNotice } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningLine, WarningNotice, type Scroller } from '@/src/components/ui';
 import { onboardingHint } from '@/src/lib/onboardingHint';
+import { marks } from '@/src/theme/extras';
+import { useFormScroll } from '@/src/lib/formScroll';
 
 const STEPS = ['welcome', 'body', 'activity', 'goal', 'plan'] as const;
+
+/** Form positions the screen can scroll to, in the order they appear: the body step, then the plan step. */
+type OnboardingField = 'sex' | 'age' | 'height' | 'weight' | 'bodyFat' | 'implausible' | 'kcal' | 'proteinG' | 'carbsG' | 'fatG';
+const BODY_FIELD_ORDER: readonly OnboardingField[] = ['sex', 'age', 'height', 'weight', 'bodyFat', 'implausible'];
+const TARGET_FIELD_ORDER: readonly OnboardingField[] = ['kcal', 'proteinG', 'carbsG', 'fatG'];
 
 export default function OnboardingScreen() {
   const theme = useTheme();
@@ -60,13 +67,15 @@ export default function OnboardingScreen() {
   const [fatTargetText, setFatTargetText] = useState('');
   const [targetsEdited, setTargetsEdited] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const scrollRef = useRef<Scroller>(null);
+  const form = useFormScroll<OnboardingField>(scrollRef, theme.spacing.xxl);
 
   const age = parseDecimal(ageText);
   const weightKg = units === 'metric' ? parseDecimal(weightText) : weightFromLb(weightText);
   const heightCm = units === 'metric' ? parseDecimal(heightText) : heightFromImperial(feetText, inchText);
   const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
   const ageCheck = validateAge(age);
-  const heightCheck = validateHeightCm(heightCm);
+  const heightCheck = validateHeightCm(heightCm, units);
   const weightCheck = validateWeightKg(weightKg);
   const fatCheck = validateBodyFat(bodyFat);
 
@@ -108,8 +117,9 @@ export default function OnboardingScreen() {
   function next() {
     setShowErrors(true);
     if (step === 1) {
-      if (!sex || !ageCheck.ok || !heightCheck.ok || !weightCheck.ok || !fatCheck.ok) return;
-      if (implausible) return;
+      // A blocked Next scrolls to the first thing to fix, so it never looks like the button did nothing.
+      const blocked = form.revealFirst(BODY_FIELD_ORDER, { sex: !sex, age: !ageCheck.ok, height: !heightCheck.ok, weight: !weightCheck.ok, bodyFat: !fatCheck.ok, implausible: !!implausible });
+      if (blocked) return;
     }
     if (step === 2 && !activity) return;
     if (step === 3 && !goal) return;
@@ -144,6 +154,7 @@ export default function OnboardingScreen() {
     );
     if (review.blocking) {
       setShowErrors(true);
+      form.revealFirst(TARGET_FIELD_ORDER, Object.fromEntries(review.issues.filter((issue) => issue.blocking).map((issue) => [issue.field, true])));
       return;
     }
     const targets = targetsEdited && draft.kcal != null && draft.proteinG != null && draft.carbsG != null && draft.fatG != null
@@ -171,7 +182,7 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <Screen testID="screen-onboarding">
+    <Screen testID="screen-onboarding" scrollRef={scrollRef} belowTabBar={false}>
       <View style={{ gap: theme.spacing.sm }}>
         <AppText variant="caption" color={theme.colors.textSecondary}>
           {t('onboarding.stepOf', { current: step + 1, total: STEPS.length, name: t(`onboarding.step.${STEPS[step]}`) })}
@@ -187,7 +198,7 @@ export default function OnboardingScreen() {
             source={require('../assets/icon.png')}
             accessibilityIgnoresInvertColors
             accessibilityLabel={t('onboarding.logoLabel')}
-            style={{ width: 96, height: 96, borderRadius: 22 }}
+            style={{ width: marks.logo, height: marks.logo, borderRadius: marks.logoRadius }}
           />
           <AppText variant="title" style={{ textAlign: 'center' }}>Macroyo</AppText>
           <AppText style={{ textAlign: 'center' }}>{t('onboarding.tagline')}</AppText>
@@ -204,17 +215,17 @@ export default function OnboardingScreen() {
       ) : null}
 
       {step === 1 ? (
-        <View style={{ gap: theme.spacing.lg }}>
+        <View onLayout={form.group('body')} style={{ gap: theme.spacing.lg }}>
           <AppText variant="title">{t('onboarding.aboutYou')}</AppText>
           <AppText variant="secondary" color={theme.colors.textSecondary}>{t('onboarding.sexNote')}</AppText>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+          <View onLayout={form.field('sex', 'body')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {(['female', 'male', 'unspecified'] as Sex[]).map((option) => (
               <Chip key={option} label={t(`sex.${option}`)} selected={sex === option} onPress={() => setSex(option)} />
             ))}
           </View>
-          {showErrors && !sex ? <AppText variant="caption" color={theme.colors.warningText}>{t('onboarding.chooseSex')}</AppText> : null}
+          {showErrors && !sex ? <WarningLine>{t('onboarding.chooseSex')}</WarningLine> : null}
           <SexConstantPicker sex={sex} value={sexConstant} onChange={setSexConstant} />
-          <Field label={t('common.age')} value={ageText} onChangeText={setAgeText} keyboard="number" error={showErrors ? text(ageCheck.message) : null} suffix={t('unit.years')} />
+          <Field label={t('common.age')} value={ageText} onChangeText={setAgeText} keyboard="number" error={showErrors ? text(ageCheck.message) : null} suffix={t('unit.years')} onLayout={form.field('age', 'body')} />
           {ageCheck.underage ? (
             <Card>
               <AppText variant="section">{t('onboarding.adultsTitle')}</AppText>
@@ -229,21 +240,25 @@ export default function OnboardingScreen() {
             options={[{ value: 'metric', label: t('units.metric') }, { value: 'imperial', label: t('units.imperial') }]}
           />
           {units === 'metric' ? (
-            <Field label={t('common.height')} value={heightText} onChangeText={setHeightText} suffix="cm" error={showErrors ? text(heightCheck.message) : null} />
+            <Field label={t('common.height')} value={heightText} onChangeText={setHeightText} suffix="cm" error={showErrors ? text(heightCheck.message) : null} onLayout={form.field('height', 'body')} />
           ) : (
-            <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-              <View style={{ flex: 1 }}>
-                <Field label={t('common.feet')} value={feetText} onChangeText={setFeetText} keyboard="number" error={showErrors ? text(heightCheck.message) : null} />
+            <View onLayout={form.field('height', 'body')} style={{ gap: theme.spacing.xs }}>
+              <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Field label={t('common.feet')} value={feetText} onChangeText={setFeetText} keyboard="number" error={showErrors && !heightCheck.ok ? ' ' : null} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label={t('common.inches')} value={inchText} onChangeText={setInchText} error={showErrors && !heightCheck.ok ? ' ' : null} />
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Field label={t('common.inches')} value={inchText} onChangeText={setInchText} error={showErrors && !heightCheck.ok ? ' ' : null} />
-              </View>
+              {/* One full-width message under both boxes: it quotes feet and inches, the same range the Calc box accepts. */}
+              {showErrors && heightCheck.message ? <WarningLine testID="height-error">{tm(heightCheck.message)}</WarningLine> : null}
             </View>
           )}
-          <Field label={t('common.weight')} value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? text(weightCheck.message) : null} />
-          <Field label={t('common.bodyFatOptional')} value={fatText} onChangeText={setFatText} suffix="%" placeholder={t('onboarding.bodyFatPlaceholder')} error={showErrors ? text(fatCheck.message) : null} />
+          <Field label={t('common.weight')} value={weightText} onChangeText={setWeightText} suffix={units === 'metric' ? 'kg' : 'lb'} error={showErrors ? text(weightCheck.message) : null} onLayout={form.field('weight', 'body')} />
+          <Field label={t('common.bodyFatOptional')} value={fatText} onChangeText={setFatText} suffix="%" placeholder={t('onboarding.bodyFatPlaceholder')} error={showErrors ? text(fatCheck.message) : null} onLayout={form.field('bodyFat', 'body')} />
           <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
-          {showErrors && implausible ? <WarningNotice testID="body-implausible">{tm(implausible)}</WarningNotice> : null}
+          {showErrors && implausible ? <WarningNotice testID="body-implausible" onLayout={form.field('implausible', 'body')}>{tm(implausible)}</WarningNotice> : null}
         </View>
       ) : null}
 
@@ -259,7 +274,7 @@ export default function OnboardingScreen() {
               onPress={() => setActivity(level)}
             />
           ))}
-          {showErrors && !activity ? <AppText variant="caption" color={theme.colors.warningText}>{t('onboarding.chooseActivity')}</AppText> : null}
+          {showErrors && !activity ? <WarningLine>{t('onboarding.chooseActivity')}</WarningLine> : null}
         </View>
       ) : null}
 
@@ -279,27 +294,27 @@ export default function OnboardingScreen() {
                   disabled={blocked}
                   onPress={() => setGoal(option)}
                 />
-                {blocked && reason ? <AppText variant="caption" color={theme.colors.warningText}>{tm(reason)}</AppText> : null}
+                {blocked && reason ? <WarningLine>{tm(reason)}</WarningLine> : null}
               </View>
             );
           })}
-          {showErrors && !goal ? <AppText variant="caption" color={theme.colors.warningText}>{t('onboarding.chooseGoal')}</AppText> : null}
+          {showErrors && !goal ? <WarningLine>{t('onboarding.chooseGoal')}</WarningLine> : null}
         </View>
       ) : null}
 
       {step === 4 && plan ? (
-        <View style={{ gap: theme.spacing.md }}>
+        <View onLayout={form.group('targets')} style={{ gap: theme.spacing.md }}>
           <AppText variant="title">{t('onboarding.planTitle')}</AppText>
           <Card>
             <FormulaPicker plan={plan} bodyFatEntered={bodyFat != null} onChange={(value) => { setFormulaChoice(value); setTargetsEdited(false); }} />
             <AppText variant="metricNumber" style={{ marginTop: theme.spacing.sm }}>{formatKcal(plan.tdee)}</AppText>
             <AppText variant="caption" color={theme.colors.textSecondary}>{t('onboarding.maintenance', { bmr: formatKcal(plan.bmr) })}</AppText>
-            {plan.capped && plan.capReason ? <AppText variant="caption" color={theme.colors.warningText} style={{ marginTop: theme.spacing.sm }}>{tm(plan.capReason)}</AppText> : null}
+            {plan.capped && plan.capReason ? <WarningLine style={{ marginTop: theme.spacing.sm }}>{tm(plan.capReason)}</WarningLine> : null}
           </Card>
-          <Field label={t('common.calories')} value={targetsEdited ? kcalText : formatInputNumber(plan.kcal)} onChangeText={(value) => { setTargetsEdited(true); setKcalText(value); }} suffix="kcal" error={targetError('kcal')} />
-          <Field label={t('macro.protein')} value={targetsEdited ? proteinText : formatInputNumber(plan.proteinG)} onChangeText={(value) => { setTargetsEdited(true); setProteinText(value); }} suffix="g" error={targetError('proteinG')} />
-          <Field label={t('macro.carbs')} value={targetsEdited ? carbText : formatInputNumber(plan.carbsG)} onChangeText={(value) => { setTargetsEdited(true); setCarbText(value); }} suffix="g" error={targetError('carbsG')} />
-          <Field label={t('macro.fat')} value={targetsEdited ? fatTargetText : formatInputNumber(plan.fatG)} onChangeText={(value) => { setTargetsEdited(true); setFatTargetText(value); }} suffix="g" error={targetError('fatG')} />
+          <Field label={t('common.calories')} value={targetsEdited ? kcalText : formatInputNumber(plan.kcal)} onChangeText={(value) => { setTargetsEdited(true); setKcalText(value); }} suffix="kcal" error={targetError('kcal')} onLayout={form.field('kcal', 'targets')} />
+          <Field label={t('macro.protein')} value={targetsEdited ? proteinText : formatInputNumber(plan.proteinG)} onChangeText={(value) => { setTargetsEdited(true); setProteinText(value); }} suffix="g" error={targetError('proteinG')} onLayout={form.field('proteinG', 'targets')} />
+          <Field label={t('macro.carbs')} value={targetsEdited ? carbText : formatInputNumber(plan.carbsG)} onChangeText={(value) => { setTargetsEdited(true); setCarbText(value); }} suffix="g" error={targetError('carbsG')} onLayout={form.field('carbsG', 'targets')} />
+          <Field label={t('macro.fat')} value={targetsEdited ? fatTargetText : formatInputNumber(plan.fatG)} onChangeText={(value) => { setTargetsEdited(true); setFatTargetText(value); }} suffix="g" error={targetError('fatG')} onLayout={form.field('fatG', 'targets')} />
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {t('onboarding.splitNote', { protein: plan.proteinG, perKg: plan.proteinPerKg, fat: plan.fatG, carbs: plan.carbsG, fiber: plan.fiberG, kcal: plan.macroKcal })}
           </AppText>
@@ -307,9 +322,7 @@ export default function OnboardingScreen() {
             <AppText key={note.key} variant="caption" color={theme.colors.textSecondary} testID={`plan-note-${note.key}`}>{tm(note)}</AppText>
           ))}
           {targetNotices(shownDraft).map((notice) => (
-            <AppText key={notice.message.key} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>
-              {tm(notice.message)}
-            </AppText>
+            <WarningLine key={notice.message.key} testID={`notice-${notice.field}`}>{tm(notice.message)}</WarningLine>
           ))}
         </View>
       ) : null}

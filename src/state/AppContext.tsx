@@ -7,6 +7,7 @@ import { getLocale, setLocale, subscribeLocale } from '../i18n/state';
 import { useI18n } from '../i18n/react';
 import { deviceLanguageTags, resolvePreference } from '../i18n/detect';
 import type { LanguagePref, Msg } from '../i18n/types';
+import { NO_NOTICE, dismissNotice, noticeVisible, raiseNotice, type NoticeState } from '../lib/storage/notice';
 import {
   EMPTY_DATA,
   READ_FAILED_MESSAGE,
@@ -25,6 +26,10 @@ import {
 interface AppContextValue {
   ready: boolean;
   error: Msg | null;
+  /** False after the user dismissed the storage notice. Writes stay blocked; the next failure shows it again. */
+  noticeVisible: boolean;
+  /** Hide the storage notice without fixing anything. */
+  dismissError: () => void;
   /** True when stored data could not be read: writes are blocked until resetAll. */
   readFailed: boolean;
   data: AppData;
@@ -52,7 +57,10 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<Msg | null>(null);
+  const [notice, setNotice] = useState<NoticeState>(NO_NOTICE);
+  const error = notice.error;
+  const setError = useCallback((next: Msg | null) => setNotice(next ? raiseNotice(next) : NO_NOTICE), []);
+  const dismissError = useCallback(() => setNotice(dismissNotice), []);
   const [readFailed, setReadFailed] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => localDateISO());
   const storeRef = useRef<StateStore | null>(null);
@@ -101,6 +109,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextValue>(() => ({
     ready,
     error,
+    noticeVisible: noticeVisible(notice),
+    dismissError,
     readFailed,
     data,
     selectedDate,
@@ -158,7 +168,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setError(result.error);
       return false;
     },
-  }), [commit, data, error, ready, readFailed, selectedDate]);
+  }), [commit, data, dismissError, notice, error, ready, readFailed, selectedDate, setError]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

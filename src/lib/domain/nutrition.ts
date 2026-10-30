@@ -551,11 +551,14 @@ export function targetNotices(draft: TargetDraft): TargetIssue[] {
   const issues: TargetIssue[] = [];
   if (draft.kcal != null && draft.kcal > 0 && draft.proteinG != null && draft.proteinG >= 0) {
     const capG = (draft.kcal * PROTEIN_MAX_KCAL_SHARE) / PROTEIN_KCAL;
-    if (draft.proteinG > capG + PROTEIN_NOTE_SLACK_G) {
+    // The note quotes the real share to one decimal and only fires when that share is strictly above the 35% it
+    // names, so it can never say "about 35%, above 35%" right at the limit.
+    const sharePct = Math.round(((draft.proteinG * PROTEIN_KCAL) / draft.kcal) * 1000) / 10;
+    if (draft.proteinG > capG + PROTEIN_NOTE_SLACK_G && sharePct > Math.round(PROTEIN_MAX_KCAL_SHARE * 100)) {
       issues.push({
         field: 'proteinG',
         blocking: false,
-        message: msg('targets.proteinHigh', { pct: Math.round(((draft.proteinG * PROTEIN_KCAL) / draft.kcal) * 100) }),
+        message: msg('targets.proteinHigh', { pct: sharePct }),
       });
     }
   }
@@ -727,8 +730,20 @@ export function validateAge(value: number | null): FieldCheck {
   return { ok: true, message: null };
 }
 
-export function validateHeightCm(value: number | null): FieldCheck {
+export function validateHeightCm(value: number | null, units: 'metric' | 'imperial' = 'metric'): FieldCheck {
   if (value == null) return { ok: false, message: msg('validate.height.missing') };
+  if (units === 'imperial') {
+    // The same range function as the Calc height box, so the message quotes exactly what is accepted.
+    const { lo, hi } = typedMeasureRange('height', 'imperial');
+    const inches = value / CM_PER_IN;
+    if (!(inches >= lo - 1e-6 && inches <= hi + 1e-6)) {
+      return {
+        ok: false,
+        message: msg('validate.height.rangeImperial', { minFt: Math.floor(lo / 12), minIn: lo % 12, maxFt: Math.floor(hi / 12), maxIn: hi % 12 }),
+      };
+    }
+    return { ok: true, message: null };
+  }
   if (!(value >= 100 && value <= 250)) {
     return { ok: false, message: msg('validate.height.range') };
   }

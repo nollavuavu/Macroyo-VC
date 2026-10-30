@@ -90,23 +90,21 @@ describe('B P1: quick-add and edit warnings scroll into view', () => {
   it('log.tsx scrolls on both the quick-add and the edit warning', () => {
     const log = read('app/(tabs)/log.tsx');
     expect(log).toMatch(/scrollRef=\{scrollRef\}/);
-    expect(log).toMatch(/testID="quick-warning" onLayout=\{\(event\) => revealWarning\(quickCardY\.current, event\)\}/);
-    expect(log).toMatch(/testID="edit-warning" onLayout=\{\(event\) => revealWarning\(portionCardY\.current, event\)\}/);
+    expect(log).toMatch(/testID="quick-warning" onLayout=\{\(event\) => \{ form\.field\('quick\.warning', 'quickCard'\)\(event\); form\.reveal\('quick\.warning'\); \}\}/);
+    expect(log).toMatch(/testID="edit-warning" onLayout=\{\(event\) => \{ form\.field\('portion\.warning', 'portionCard'\)\(event\); form\.reveal\('portion\.warning'\); \}\}/);
   });
 });
 
 describe('B P1-3: the floating button never covers the last row', () => {
   it('content padding always ends above the button, for every inset', () => {
     const theme = getTheme('light');
-    for (let inset = 0; inset <= 60; inset += 4) {
-      const fab = fabGeometry(theme, inset);
-      expect(fab.contentPaddingBottom).toBeGreaterThanOrEqual(fab.top + theme.spacing.lg);
-      expect(fab.top - fab.bottom).toBe(theme.sizes.fab);
-    }
+    const fab = fabGeometry(theme);
+    expect(fab.contentPaddingBottom).toBeGreaterThanOrEqual(fab.top + theme.spacing.lg);
+    expect(fab.top - fab.bottom).toBe(theme.sizes.fab);
   });
   it('Screen and the button read the same geometry', () => {
-    expect(read('src/components/ui.tsx')).toMatch(/fabGeometry\(theme, insets\.bottom\)\.contentPaddingBottom/);
-    expect(read('app/(tabs)/index.tsx')).toMatch(/bottom: fabGeometry\(theme, insets\.bottom\)\.bottom/);
+    expect(read('src/components/ui.tsx')).toMatch(/screenBottomPadding\(theme, \{ insetBottom: insets\.bottom, belowTabBar, fabClearance \}\)/);
+    expect(read('app/(tabs)/index.tsx')).toMatch(/bottom: fabGeometry\(theme\)\.bottom/);
   });
 });
 
@@ -142,9 +140,9 @@ describe('B P2: search rows, legends, warnings', () => {
       expect(contrastRatio(boundary, colors.background)).toBeGreaterThanOrEqual(3);
     }
     expect(contrastRatio(lightColors.warning, lightColors.surface)).toBeLessThan(3); // why the swap was needed
-    expect(read('src/components/Ring.tsx')).toMatch(/over \? warningBoundary\(theme\)/);
+    expect(read('src/components/Ring.tsx')).toMatch(/stroke=\{warningBoundary\(theme\)\}/);
     expect(read('src/components/ui.tsx')).toMatch(/error \? warningBoundary\(theme\)/);
-    expect(read('app/(tabs)/trends.tsx')).toMatch(/over=\{warningBoundary\(theme\)\}/);
+    expect(read('app/(tabs)/trends.tsx')).toMatch(/overOutline=\{warningBoundary\(theme\)\}/);
   });
   it('quick-add, calc and onboarding warnings carry an icon through WarningNotice', () => {
     expect(read('app/(tabs)/calc.tsx')).toMatch(/<WarningNotice testID="calc-fix-entry"/);

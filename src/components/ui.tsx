@@ -13,11 +13,12 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { TriangleAlert } from 'lucide-react-native';
+import { TriangleAlert, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '../state/AppContext';
 import { useI18n } from '../i18n/react';
-import { borderStrong, fabGeometry, marks, warningBoundary } from '../theme/extras';
+import { borderStrong, borders, icons, marks, screenBottomPadding, strokes, warningBoundary } from '../theme/extras';
+import { fitTextProps } from '../lib/fitLabel';
 import type { Theme, TypographyKey } from '../theme/theme';
 
 export { DISCLAIMER } from '../lib/copy';
@@ -33,7 +34,7 @@ export function AppText({
   testID,
   accessibilityRole,
 }: {
-  /** Shrinks the text down to 80% instead of wrapping or clipping (single-line labels in fixed-width controls). */
+  /** Shrinks the text down to 80% on native (two lines on web) instead of clipping: labels in fixed-width controls. */
   fit?: boolean;
   testID?: string;
   accessibilityRole?: 'alert' | 'text';
@@ -50,9 +51,8 @@ export function AppText({
       testID={testID}
       accessibilityRole={accessibilityRole}
       maxFontSizeMultiplier={2}
-      numberOfLines={fit ? 1 : numberOfLines}
-      adjustsFontSizeToFit={fit}
-      minimumFontScale={fit ? 0.8 : undefined}
+      // `fit`: shrink to 80% on native, wrap to two lines on web (react-native-web has no font shrinking).
+      {...(fit ? fitTextProps(Platform.OS) : { numberOfLines })}
       // Finnish compounds are long: let Android hyphenate at the soft hyphens in the catalog (iOS and web already do).
       android_hyphenationFrequency={locale === 'fi' ? 'normal' : undefined}
       style={[theme.typography[variant], { color: color ?? theme.colors.textPrimary }, style]}
@@ -70,13 +70,16 @@ export function Screen({
   scroll = true,
   testID,
   fabClearance = false,
+  belowTabBar = true,
   scrollRef,
 }: {
   children: ReactNode;
   scroll?: boolean;
   testID?: string;
-  /** Adds FAB height + 24 of bottom padding so the end of the scroll clears a floating button. */
+  /** Adds FAB height + margin of bottom padding so the end of the scroll clears a floating button. */
   fabClearance?: boolean;
+  /** True (default) for the tab screens: the navigator already keeps the tab bar and the bottom inset out of the way. */
+  belowTabBar?: boolean;
   /** Lets a screen scroll a warning into view. */
   scrollRef?: Ref<Scroller>;
 }) {
@@ -90,7 +93,7 @@ export function Screen({
       contentContainerStyle={{
         paddingHorizontal: theme.spacing.lg,
         paddingTop: theme.spacing.sm,
-        paddingBottom: fabClearance ? fabGeometry(theme, insets.bottom).contentPaddingBottom : insets.bottom + theme.sizes.tabBarHeight + theme.spacing.xxxl,
+        paddingBottom: screenBottomPadding(theme, { insetBottom: insets.bottom, belowTabBar, fabClearance }),
         gap: theme.spacing.lg,
       }}
     >
@@ -109,19 +112,24 @@ export function Screen({
   );
 }
 
-/** Shows save/read failures from the app store. When stored data was unreadable, offers the explicit reset. */
+/**
+ * Shows save/read failures from the app store. Retry is the main action; when stored data was unreadable it also
+ * offers the explicit erase, styled as a destructive secondary button so the two are never mistaken for each other.
+ * The notice can be dismissed. That only hides this card: writes stay blocked in the store, and the next failed
+ * action shows the notice again.
+ */
 export function StorageBanner() {
   const theme = useTheme();
   const { t, tm } = useI18n();
-  const { error, readFailed, resetAll, retry } = useApp();
-  if (!error) return null;
+  const { error, noticeVisible, readFailed, resetAll, retry, dismissError } = useApp();
+  if (!error || !noticeVisible) return null;
   return (
     <View style={{ paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm }}>
-      <WarningNotice framed testID="storage-banner" actions={(
+      <WarningNotice framed testID="storage-banner" onDismiss={dismissError} actions={(
         <>
           <SecondaryButton label={t('storage.retry')} onPress={() => { void retry(); }} testID="storage-retry" />
           {readFailed ? (
-            <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="reset-unreadable" />
+            <SecondaryButton label={t('storage.eraseUnreadable')} onPress={() => { void resetAll(); }} testID="reset-unreadable" tone="destructive" />
           ) : null}
         </>
       )}>
@@ -142,6 +150,7 @@ export function WarningNotice({
   actions,
   testID,
   onLayout,
+  onDismiss,
   variant = 'secondary',
 }: {
   children: ReactNode;
@@ -149,9 +158,12 @@ export function WarningNotice({
   actions?: ReactNode;
   testID?: string;
   onLayout?: (event: LayoutChangeEvent) => void;
+  /** Adds a close button. Dismissing hides the notice only; it never clears the problem behind it. */
+  onDismiss?: () => void;
   variant?: TypographyKey;
 }) {
   const theme = useTheme();
+  const { t } = useI18n();
   const color = warningBoundary(theme);
   return (
     <View
@@ -159,22 +171,62 @@ export function WarningNotice({
       testID={testID}
       onLayout={onLayout}
       style={framed
-        ? { backgroundColor: theme.colors.surface, borderColor: color, borderWidth: 1.5, borderRadius: theme.radii.card, padding: theme.spacing.lg, gap: theme.spacing.md }
+        ? { backgroundColor: theme.colors.surface, borderColor: color, borderWidth: borders.emphasis, borderRadius: theme.radii.card, padding: theme.spacing.lg, gap: theme.spacing.md }
         : { borderLeftColor: color, borderLeftWidth: theme.spacing.xs, paddingLeft: theme.spacing.md, gap: theme.spacing.sm }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }}>
-        <TriangleAlert color={color} size={20} strokeWidth={2.2} />
+        <TriangleAlert color={color} size={icons.md} strokeWidth={strokes.nav} />
         <AppText variant={variant} color={theme.colors.warningText} style={{ flex: 1 }}>{children}</AppText>
+        {onDismiss ? (
+          <Pressable
+            testID={testID ? `${testID}-dismiss` : undefined}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.dismiss')}
+            onPress={onDismiss}
+            hitSlop={theme.spacing.sm}
+            style={{ width: theme.sizes.minTouchTarget, height: theme.sizes.minTouchTarget, marginTop: -theme.spacing.md, marginRight: -theme.spacing.md, marginBottom: -theme.spacing.md, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X color={theme.colors.warningText} size={icons.md} strokeWidth={strokes.nav} />
+          </Pressable>
+        ) : null}
       </View>
       {actions}
     </View>
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+/**
+ * A single amber caption line with the warning icon, for hints and blockers that are not a full notice.
+ * Colour alone is not a signal (WCAG 1.4.1), and the amber border of a field is not there for captions that
+ * stand alone, so the icon makes them read as warnings. Text uses warningText, the icon the warning boundary.
+ */
+export function WarningLine({
+  children,
+  testID,
+  onLayout,
+  style,
+}: {
+  children: ReactNode;
+  testID?: string;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const theme = useTheme();
+  return (
+    <View accessibilityRole="alert" testID={testID} onLayout={onLayout} style={[{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }, style]}>
+      <View style={{ height: theme.typography.caption.lineHeight, justifyContent: 'center' }}>
+        <TriangleAlert color={warningBoundary(theme)} size={icons.sm} strokeWidth={strokes.nav} />
+      </View>
+      <AppText variant="caption" color={theme.colors.warningText} style={{ flex: 1 }}>{children}</AppText>
+    </View>
+  );
+}
+
+export function Card({ children, style, onLayout }: { children: ReactNode; style?: StyleProp<ViewStyle>; onLayout?: (event: LayoutChangeEvent) => void }) {
   const theme = useTheme();
   return (
     <View
+      onLayout={onLayout}
       style={[
         {
           backgroundColor: theme.colors.surface,
@@ -233,12 +285,16 @@ export function SecondaryButton({
   label,
   onPress,
   testID,
+  tone = 'default',
 }: {
   label: string;
   onPress: () => void;
   testID?: string;
+  /** `destructive` is for actions that erase data: an amber outline and amber label, clearly not the default button. */
+  tone?: 'default' | 'destructive';
 }) {
   const theme = useTheme();
+  const destructive = tone === 'destructive';
   return (
     <Pressable
       testID={testID}
@@ -247,9 +303,9 @@ export function SecondaryButton({
       style={({ pressed }) => ({
         minHeight: theme.sizes.minTouchTarget,
         borderRadius: theme.radii.button,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        backgroundColor: theme.colors.surface,
+        borderWidth: destructive ? borders.emphasis : borders.thin,
+        borderColor: destructive ? warningBoundary(theme) : theme.colors.border,
+        backgroundColor: destructive ? 'transparent' : theme.colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: theme.spacing.lg,
@@ -257,7 +313,7 @@ export function SecondaryButton({
         opacity: pressed ? 0.8 : 1,
       })}
     >
-      <AppText variant="button" style={{ textAlign: 'center' }} color={theme.colors.primary}>
+      <AppText variant="button" style={{ textAlign: 'center' }} color={destructive ? theme.colors.warningText : theme.colors.primary}>
         {label}
       </AppText>
     </Pressable>
@@ -295,7 +351,7 @@ export function Chip({
         paddingVertical: theme.spacing.sm,
         maxWidth: '100%',
         backgroundColor: selected ? theme.colors.accent : theme.colors.surface,
-        borderWidth: 1,
+        borderWidth: borders.thin,
         borderColor: selected ? theme.colors.accent : borderStrong(theme),
         opacity: disabled ? 0.45 : 1,
         justifyContent: 'center',
@@ -329,7 +385,7 @@ export function Segmented<T extends string>({
         flexDirection: 'row',
         backgroundColor: theme.colors.background,
         borderRadius: theme.radii.pill,
-        borderWidth: 1,
+        borderWidth: borders.thin,
         borderColor: borderStrong(theme),
         padding: theme.spacing.xxs,
         gap: theme.spacing.xxs,
@@ -376,6 +432,7 @@ export function Field({
   labelColor,
   accessibilityLabel,
   testID,
+  onLayout,
 }: {
   label: string;
   value: string;
@@ -388,12 +445,14 @@ export function Field({
   labelColor?: string;
   accessibilityLabel?: string;
   testID?: string;
+  /** Reports where the field sits, so a screen can scroll to the first invalid one. */
+  onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
-  const borderWidth = focused ? 2 : 1;
+  const borderWidth = focused ? borders.focus : borders.thin;
   return (
-    <View style={{ gap: theme.spacing.xs }}>
+    <View onLayout={onLayout} style={{ gap: theme.spacing.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
         {labelColor ? <View style={{ width: marks.dot, height: marks.dot, borderRadius: marks.dot / 2, backgroundColor: labelColor }} /> : null}
         <AppText variant="secondary" color={theme.colors.textSecondary}>
@@ -410,7 +469,7 @@ export function Field({
           flexDirection: 'row',
           alignItems: 'center',
           // Keep the text in place when the border grows from 1 to 2.
-          paddingHorizontal: theme.spacing.lg - (borderWidth - 1),
+          paddingHorizontal: theme.spacing.lg - (borderWidth - borders.thin),
         }}
       >
         <TextInput

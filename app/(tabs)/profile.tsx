@@ -32,7 +32,7 @@ import { LANGUAGE_PREFS, type Msg } from '@/src/i18n/types';
 import type { Appearance, Profile, UnitSystem } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { eraseThenLeave } from '@/src/lib/reset';
-import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningNotice } from '@/src/components/ui';
+import { AppText, Card, Chip, Disclaimer, Field, GroupLabel, PrimaryButton, Screen, SecondaryButton, Segmented, SwitchRow, WarningLine, WarningNotice } from '@/src/components/ui';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -41,7 +41,13 @@ export default function ProfileScreen() {
   const profile = data.profile;
   const [confirmReset, setConfirmReset] = useState(false);
   const [notice, setNotice] = useState<Msg | null>(null);
-  const clearNotice = useCallback((_?: Msg | null) => setNotice((current) => nextBanner(current, { type: 'edit' })), []);
+  // Plan notes (the 'about your plan' lines after a save) live here, not in BodyEditor: a save changes the editor's
+  // key and remounts it, which used to drop the notes at once. Any edit afterwards clears them, in either editor.
+  const [shownPlanNotes, setShownPlanNotes] = useState<Msg[]>([]);
+  const clearNotice = useCallback((_?: Msg | null) => {
+    setNotice((current) => nextBanner(current, { type: 'edit' }));
+    setShownPlanNotes([]);
+  }, []);
   if (!profile) {
     return (
       <Screen testID="screen-profile">
@@ -90,6 +96,8 @@ export default function ProfileScreen() {
         profile={profile}
         onSave={save}
         onNotice={clearNotice}
+        planNotes={shownPlanNotes}
+        onPlanNotes={setShownPlanNotes}
       />
       <TargetEditor
         key={`${locale}-${profile.targets.kcal}-${profile.targets.proteinG}-${profile.targets.carbsG}-${profile.targets.fatG}`}
@@ -105,7 +113,7 @@ export default function ProfileScreen() {
         </AppText>
         {confirmReset ? (
           <>
-            <AppText variant="caption" color={theme.colors.warningText}>{t('profile.eraseWarning')}</AppText>
+            <WarningLine>{t('profile.eraseWarning')}</WarningLine>
             {storageError ? <WarningNotice testID="erase-error" variant="caption">{tm(storageError)}</WarningNotice> : null}
             <PrimaryButton label={t('profile.eraseEverything')} onPress={() => { void eraseThenLeave(resetAll, () => router.replace('/onboarding')); }} testID="erase-everything" />
             <SecondaryButton label={t('common.cancel')} onPress={() => setConfirmReset(false)} />
@@ -121,6 +129,7 @@ export default function ProfileScreen() {
 
   async function save(next: Profile, message: Msg = msg('profile.saved')): Promise<boolean> {
     setNotice((current) => nextBanner(current, { type: 'save-attempt' })); // a new attempt clears the previous banner
+    setShownPlanNotes([]);
     const ok = await updateProfile(next);
     if (ok) setNotice((current) => nextBanner(current, { type: 'saved', message }));
     return ok;
@@ -131,11 +140,16 @@ function BodyEditor({
   profile,
   onSave,
   onNotice,
+  planNotes: shownPlanNotes,
+  onPlanNotes,
 }: {
   profile: Profile;
   onSave: (profile: Profile, message?: Msg) => Promise<boolean>;
-  /** Called with null when the user edits a field, so a stale 'saved' banner goes away. */
+  /** Called with null when the user edits a field, so a stale 'saved' banner and the plan notes go away. */
   onNotice: (message: Msg | null) => void;
+  /** Plan notes from the last save, owned by the screen so they survive this editor remounting. */
+  planNotes: Msg[];
+  onPlanNotes: (notes: Msg[]) => void;
 }) {
   const theme = useTheme();
   const { t, tm } = useI18n();
@@ -152,7 +166,6 @@ function BodyEditor({
   const [formulaOverride, setFormulaOverride] = useState<BmrFormula | null>(profile.formulaOverride ?? null);
   const [sexConstant, setSexConstant] = useState<SexConstantChoice | null>(profile.sexConstant ?? null);
   const [error, setError] = useState<Msg | null>(null);
-  const [planNotesShown, setPlanNotesShown] = useState<Msg[]>([]);
 
   // Imperial text is a rounded display of the stored metric value. If the user did not change the text,
   // keep the stored value so saving never drifts it (180 cm -> 180.086 cm).
@@ -167,10 +180,7 @@ function BodyEditor({
   // Editing anything clears a stale 'saved' banner (skip the mount render).
   const mounted = useRef(false);
   useEffect(() => {
-    if (mounted.current) {
-      onNotice(null);
-      setPlanNotesShown([]);
-    }
+    if (mounted.current) onNotice(null);
     mounted.current = true;
   }, [sex, ageText, heightText, inchText, weightText, fatText, activity, goal, pregnant, formulaOverride, sexConstant, onNotice]);
 
@@ -180,7 +190,7 @@ function BodyEditor({
     const heightCm = resolveHeight();
     const weightKg = resolveWeight();
     const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
-    if (age == null || heightCm == null || weightKg == null || !validateAge(age).ok || !validateHeightCm(heightCm).ok || !validateWeightKg(weightKg).ok || !validateBodyFat(bodyFat).ok) return null;
+    if (age == null || heightCm == null || weightKg == null || !validateAge(age).ok || !validateHeightCm(heightCm, profile.units).ok || !validateWeightKg(weightKg).ok || !validateBodyFat(bodyFat).ok) return null;
     return { bodyFat, plan: buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: formulaOverride ?? undefined, sexConstant }) };
   })();
 
@@ -189,7 +199,7 @@ function BodyEditor({
     const heightCm = resolveHeight();
     const weightKg = resolveWeight();
     const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
-    const checks = [validateAge(age), validateHeightCm(heightCm), validateWeightKg(weightKg), validateBodyFat(bodyFat)];
+    const checks = [validateAge(age), validateHeightCm(heightCm, profile.units), validateWeightKg(weightKg), validateBodyFat(bodyFat)];
     const failed = checks.find((check) => !check.ok);
     if (failed || age == null || heightCm == null || weightKg == null) {
       setError(failed?.message ?? msg('profile.checkFields'));
@@ -229,7 +239,7 @@ function BodyEditor({
       return;
     }
     setError(null);
-    setPlanNotesShown(!profile.targets.custom || recalculate ? planNotes(plan) : []);
+    onPlanNotes(!profile.targets.custom || recalculate ? planNotes(plan) : []);
   }
 
   return (
@@ -267,8 +277,8 @@ function BodyEditor({
         ))}
       </View>
       <SwitchRow label={t('common.pregnant')} value={pregnant} onValueChange={setPregnant} />
-      {error ? <AppText variant="caption" color={theme.colors.warningText}>{tm(error)}</AppText> : null}
-      {planNotesShown.map((note) => (
+      {error ? <WarningLine>{tm(error)}</WarningLine> : null}
+      {shownPlanNotes.map((note) => (
         <WarningNotice key={note.key} variant="caption" testID={`plan-note-${note.key}`}>{tm(note)}</WarningNotice>
       ))}
       <PrimaryButton label={profile.targets.custom ? t('profile.saveKeepTargets') : t('profile.saveRecalculate')} onPress={() => saveBody(false)} />
@@ -284,7 +294,7 @@ function TargetEditor({
 }: {
   profile: Profile;
   onSave: (profile: Profile, message?: Msg) => Promise<boolean>;
-  /** Called with null when the user edits a field, so a stale 'saved' banner goes away. */
+  /** Called with null when the user edits a field, so a stale 'saved' banner and the plan notes go away. */
   onNotice: (message: Msg | null) => void;
 }) {
   const theme = useTheme();
@@ -349,10 +359,10 @@ function TargetEditor({
         {t('profile.gramsAddUp', { energy: Math.round(energy) })}
       </AppText>
       {liveNotices.map((notice) => (
-        <AppText key={notice.message.key} variant="caption" color={theme.colors.warningText} accessibilityRole="alert" testID={`notice-${notice.field}`}>{tm(notice.message)}</AppText>
+        <WarningLine key={notice.message.key} testID={`notice-${notice.field}`}>{tm(notice.message)}</WarningLine>
       ))}
       {issues.map((issue) => (
-        <AppText key={issue.key} variant="caption" color={theme.colors.warningText}>{tm(issue)}</AppText>
+        <WarningLine key={issue.key}>{tm(issue)}</WarningLine>
       ))}
       <PrimaryButton label={t('profile.saveTargets')} onPress={saveTargets} testID="save-targets" />
     </Card>
