@@ -1,3 +1,11 @@
+export {
+  MEASURE_LIMITS,
+  heightFeetInchesRange,
+  inMeasureRange,
+  measureRange,
+  measureRangeMessage,
+  measureRangeMetric,
+} from './ranges';
 export { scaleHalfUp1, roundToSum, remainingDisplay, type RemainingDisplay } from './portion';
 export { DEFICIT_UNAVAILABLE_MESSAGE } from './projection';
 export {

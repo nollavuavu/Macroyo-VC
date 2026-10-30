@@ -17,6 +17,7 @@ import {
   projectV1,
   validateBodyFat,
   validateHeightCm,
+  measureRangeMetric,
   validateWeightKg,
   validateTypedMeasure,
   DEFICIT_UNAVAILABLE_MESSAGE,
@@ -67,8 +68,11 @@ export default function CalcScreen() {
   const typedAge = ageText == null ? null : validateTypedMeasure('age', ageText, units);
   const typedInvalid = [typedHeight, typedWeight, typedAge].some((typed) => typed != null && !typed.ok);
 
-  const heightError = typedHeight?.message ?? validateHeightCm(heightCm).message;
-  const weightError = typedWeight?.message ?? validateWeightKg(weightKg).message;
+  // The sliders use the same limits as the typed boxes and the other screens (ranges.ts), in the chosen units.
+  const heightBounds = measureRangeMetric('height', units);
+  const weightBounds = measureRangeMetric('weight', units);
+  const heightError = typedHeight?.message ?? validateHeightCm(heightCm, units, 'inches').message;
+  const weightError = typedWeight?.message ?? validateWeightKg(weightKg, units).message;
   const fatError = bodyFat == null ? null : validateBodyFat(bodyFat).message;
   const bmi = bmiMetric(weightKg, heightCm);
   const bmiClass = bmi == null ? null : bmiCategory(bmi);
@@ -151,7 +155,7 @@ export default function CalcScreen() {
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.height')}</AppText>
         <AppText variant="inputNumber">{units === 'metric' ? withUnit(formatAmount(heightCm), 'cm') : withUnit(formatAmount(heightCm / 2.54), 'in')}</AppText>
-        <Slider minimumValue={120} maximumValue={230} value={heightCm} onValueChange={(value) => { setHeightCm(value); setHeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
+        <Slider minimumValue={heightBounds.min} maximumValue={heightBounds.max} value={Math.min(heightBounds.max, Math.max(heightBounds.min, heightCm))} onValueChange={(value) => { setHeightCm(value); setHeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
         <Field label={t('calc.typeHeight')} value={heightText ?? ''} onChangeText={(value) => {
           setHeightText(value);
           const typed = validateTypedMeasure('height', value, units);
@@ -161,7 +165,7 @@ export default function CalcScreen() {
       <Card style={{ gap: theme.spacing.sm }}>
         <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.weight')}</AppText>
         <AppText variant="inputNumber">{units === 'metric' ? withUnit(formatAmount(weightKg), 'kg') : withUnit(formatAmount(weightKg / 0.45359237), 'lb')}</AppText>
-        <Slider minimumValue={30} maximumValue={250} value={Math.min(250, Math.max(30, weightKg))} onValueChange={(value) => { setWeightKg(value); setWeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
+        <Slider minimumValue={weightBounds.min} maximumValue={weightBounds.max} value={Math.min(weightBounds.max, Math.max(weightBounds.min, weightKg))} onValueChange={(value) => { setWeightKg(value); setWeightText(null); }} minimumTrackTintColor={theme.colors.primary} maximumTrackTintColor={theme.colors.border} thumbTintColor={theme.colors.primary} />
         <Field label={t('calc.typeWeight')} value={weightText ?? ''} onChangeText={(value) => {
           setWeightText(value);
           const typed = validateTypedMeasure('weight', value, units);

@@ -17,8 +17,9 @@ import {
   type ProjectionSex,
 } from './projection';
 
-export const KG_PER_LB = 0.45359237;
-export const CM_PER_IN = 2.54;
+import { CM_PER_IN, KG_PER_LB, inMeasureRange, measureRange, measureRangeMessage, type MeasureKind, type Units } from './ranges';
+
+export { CM_PER_IN, KG_PER_LB };
 export const PROTEIN_KCAL = 4;
 export const CARB_KCAL = 4;
 export const FAT_KCAL = 9;
@@ -730,31 +731,20 @@ export function validateAge(value: number | null): FieldCheck {
   return { ok: true, message: null };
 }
 
-export function validateHeightCm(value: number | null, units: 'metric' | 'imperial' = 'metric'): FieldCheck {
+/**
+ * Height and weight checks share one range module (`ranges.ts`) with Calc, so every screen accepts the same values
+ * and an imperial user is quoted feet and inches (height) or pounds (weight), never cm or kg.
+ * `form`: onboarding and Profile have feet and inches boxes; Calc has one inches box.
+ */
+export function validateHeightCm(value: number | null, units: Units = 'metric', form: 'feetInches' | 'inches' = 'feetInches'): FieldCheck {
   if (value == null) return { ok: false, message: msg('validate.height.missing') };
-  if (units === 'imperial') {
-    // The same range function as the Calc height box, so the message quotes exactly what is accepted.
-    const { lo, hi } = typedMeasureRange('height', 'imperial');
-    const inches = value / CM_PER_IN;
-    if (!(inches >= lo - 1e-6 && inches <= hi + 1e-6)) {
-      return {
-        ok: false,
-        message: msg('validate.height.rangeImperial', { minFt: Math.floor(lo / 12), minIn: lo % 12, maxFt: Math.floor(hi / 12), maxIn: hi % 12 }),
-      };
-    }
-    return { ok: true, message: null };
-  }
-  if (!(value >= 100 && value <= 250)) {
-    return { ok: false, message: msg('validate.height.range') };
-  }
+  if (!inMeasureRange('height', units, value)) return { ok: false, message: measureRangeMessage('height', units, form) };
   return { ok: true, message: null };
 }
 
-export function validateWeightKg(value: number | null): FieldCheck {
+export function validateWeightKg(value: number | null, units: Units = 'metric'): FieldCheck {
   if (value == null) return { ok: false, message: msg('validate.weight.missing') };
-  if (!(value >= 30 && value <= 300)) {
-    return { ok: false, message: msg('validate.weight.range') };
-  }
+  if (!inMeasureRange('weight', units, value)) return { ok: false, message: measureRangeMessage('weight', units) };
   return { ok: true, message: null };
 }
 
@@ -867,44 +857,20 @@ export function quickAddDecision(input: QuickAddInput, confirmed: boolean): Quic
   return { action: 'save' };
 }
 
-export type TypedMeasureKind = 'height' | 'weight' | 'age';
+export type TypedMeasureKind = MeasureKind;
 
-const TYPED_RANGE = {
-  height: { min: 120, max: 230 },
-  weight: { min: 30, max: 250 },
-  age: { min: 18, max: 120 },
-} as const;
+/** The accepted range for a typed measure in the units it is typed in (see ranges.ts, the single source). */
+export const typedMeasureRange = measureRange;
 
-/**
- * Validates the raw text typed into a Calc box (not the clamped state behind it).
- * Calc ranges match its sliders: 120-230 cm, 30-250 kg, 18-120 years.
- * `value` is in cm / kg / years.
- */
-/**
- * The accepted range for a typed measure, in the units it is typed in. Imperial bounds are whole inches or pounds
- * rounded inward from the metric limits, so every accepted value is also inside the metric limits.
- */
-export function typedMeasureRange(kind: TypedMeasureKind, units: 'metric' | 'imperial'): { lo: number; hi: number } {
-  const range = TYPED_RANGE[kind];
-  if (units !== 'imperial' || kind === 'age') return { lo: range.min, hi: range.max };
-  const perUnit = kind === 'height' ? CM_PER_IN : KG_PER_LB;
-  return { lo: Math.ceil(range.min / perUnit - 1e-9), hi: Math.floor(range.max / perUnit + 1e-9) };
-}
-
+/** Validates the raw text typed into a Calc box (not the clamped state behind it). `value` is in cm / kg / years. */
 export function validateTypedMeasure(
   kind: TypedMeasureKind,
   raw: string,
   units: 'metric' | 'imperial',
 ): { ok: boolean; value: number | null; message: Msg | null } {
-  const range = TYPED_RANGE[kind];
   const imperial = units === 'imperial' && kind !== 'age';
-  const { lo, hi } = typedMeasureRange(kind, units);
-  const rangeKey: MessageKey = kind === 'age'
-    ? 'validate.typed.range.age'
-    : kind === 'height'
-      ? (imperial ? 'validate.typed.range.height.in' : 'validate.typed.range.height.cm')
-      : imperial ? 'validate.typed.range.weight.lb' : 'validate.typed.range.weight.kg';
-  const rangeText = msg(rangeKey, { min: lo, max: hi });
+  const { lo, hi } = measureRange(kind, units);
+  const rangeText = measureRangeMessage(kind, units, 'inches');
   const parsed = parseDecimal(raw);
   if (parsed == null) {
     const message = isAmbiguousThousands(raw)

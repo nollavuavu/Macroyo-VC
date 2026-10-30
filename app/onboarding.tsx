@@ -76,7 +76,7 @@ export default function OnboardingScreen() {
   const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
   const ageCheck = validateAge(age);
   const heightCheck = validateHeightCm(heightCm, units);
-  const weightCheck = validateWeightKg(weightKg);
+  const weightCheck = validateWeightKg(weightKg, units);
   const fatCheck = validateBodyFat(bodyFat);
 
   // Unrealistic combinations (e.g. 30 kg, 100 cm, 120 years) are stopped on the body step with a clear message.

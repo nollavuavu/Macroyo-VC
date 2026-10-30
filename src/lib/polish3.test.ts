@@ -272,13 +272,13 @@ describe('Onboarding imperial height message', () => {
     }
   });
   it('metric is unchanged and still quotes centimetres', () => {
-    expect(validateHeightCm(99).ok).toBe(false);
-    expect(en(validateHeightCm(99).message!)).toBe('Enter a height from 100 to 250 cm.');
+    expect(validateHeightCm(119).ok).toBe(false);
+    expect(en(validateHeightCm(119).message!)).toBe('Enter a height from 120 to 230 cm.');
     expect(validateHeightCm(180, 'metric').ok).toBe(true);
   });
   it('the screens pass the unit', () => {
     expect(read('app/onboarding.tsx')).toMatch(/validateHeightCm\(heightCm, units\)/);
-    expect(read('app/(tabs)/profile.tsx')).toMatch(/validateHeightCm\(heightCm, profile\.units\)/);
+    expect(read('app/(tabs)/profile.tsx')).toMatch(/validateHeightCm\(value, profile\.units\)/);
     expect(read('app/onboarding.tsx')).toMatch(/testID="height-error"/);
   });
   it('the message exists in vi and fi with the same placeholders', () => {

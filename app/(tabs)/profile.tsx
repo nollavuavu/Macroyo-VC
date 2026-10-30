@@ -184,13 +184,18 @@ function BodyEditor({
     mounted.current = true;
   }, [sex, ageText, heightText, inchText, weightText, fatText, activity, goal, pregnant, formulaOverride, sexConstant, onNotice]);
 
+  // Same range module as onboarding and Calc, in the profile's units. A value the user did not touch is kept as stored,
+  // so a profile saved before the ranges were unified (e.g. 270 kg) can still change goal or activity.
+  const checkHeight = (value: number | null) => (value != null && value === profile.heightCm ? { ok: true, message: null } : validateHeightCm(value, profile.units));
+  const checkWeight = (value: number | null) => (value != null && value === profile.weightKg ? { ok: true, message: null } : validateWeightKg(value, profile.units));
+
   // Live preview so the active formula, its BMR and the unspecified-sex note are always visible.
   const previewPlan = (() => {
     const age = parseDecimal(ageText);
     const heightCm = resolveHeight();
     const weightKg = resolveWeight();
     const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
-    if (age == null || heightCm == null || weightKg == null || !validateAge(age).ok || !validateHeightCm(heightCm, profile.units).ok || !validateWeightKg(weightKg).ok || !validateBodyFat(bodyFat).ok) return null;
+    if (age == null || heightCm == null || weightKg == null || !validateAge(age).ok || !checkHeight(heightCm).ok || !checkWeight(weightKg).ok || !validateBodyFat(bodyFat).ok) return null;
     return { bodyFat, plan: buildMacroPlan({ sex, age, heightCm, weightKg, bodyFatPct: bodyFat, activity, goal, pregnant, formula: formulaOverride ?? undefined, sexConstant }) };
   })();
 
@@ -199,7 +204,7 @@ function BodyEditor({
     const heightCm = resolveHeight();
     const weightKg = resolveWeight();
     const bodyFat = fatText.trim() === '' ? null : parseDecimal(fatText);
-    const checks = [validateAge(age), validateHeightCm(heightCm, profile.units), validateWeightKg(weightKg), validateBodyFat(bodyFat)];
+    const checks = [validateAge(age), checkHeight(heightCm), checkWeight(weightKg), validateBodyFat(bodyFat)];
     const failed = checks.find((check) => !check.ok);
     if (failed || age == null || heightCm == null || weightKg == null) {
       setError(failed?.message ?? msg('profile.checkFields'));

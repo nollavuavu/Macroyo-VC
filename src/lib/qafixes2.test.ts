@@ -5,6 +5,7 @@ import { EMPTY_DATA, freshEmptyData } from './storage/types';
 import { eraseThenLeave } from './reset';
 import { typedMeasureRange, validateTypedMeasure, withoutFieldError, quickAddFieldErrors } from './domain';
 import { msg } from '../i18n';
+import { BODY_STAT, LOG, PROFILE } from './testFixtures';
 
 const src = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -30,7 +31,7 @@ describe('QA-13: stored data of the wrong shape is a read failure', () => {
 
   it('accepts the shapes the app writes, and fills missing lists', () => {
     expect(parseStoredData('{}')).toEqual({ profile: null, logs: [], bodyStats: [] });
-    const full = { profile: { age: 30 }, logs: [{ id: 'a' }], bodyStats: [{ id: 'b' }], language: 'vi' };
+    const full = { profile: PROFILE, logs: [LOG], bodyStats: [BODY_STAT], language: 'vi' };
     expect(parseStoredData(JSON.stringify(full))).toEqual(full);
     expect(validateStoredData({ profile: null, logs: [], bodyStats: [], language: 'klingon' })).not.toHaveProperty('language');
   });
