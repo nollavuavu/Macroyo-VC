@@ -17,7 +17,7 @@ import { TriangleAlert, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '../state/AppContext';
 import { useI18n } from '../i18n/react';
-import { borderStrong, borders, icons, marks, screenBottomPadding, strokes, warningBoundary } from '../theme/extras';
+import { borderStrong, borders, icons, marks, screenBottomPadding, snackbarGeometry, strokes, warningBoundary } from '../theme/extras';
 import { fitTextProps } from '../lib/fitLabel';
 import type { Theme, TypographyKey } from '../theme/theme';
 
@@ -70,6 +70,7 @@ export function Screen({
   scroll = true,
   testID,
   fabClearance = false,
+  bottomClearance,
   belowTabBar = true,
   scrollRef,
 }: {
@@ -78,6 +79,8 @@ export function Screen({
   testID?: string;
   /** Adds FAB height + margin of bottom padding so the end of the scroll clears a floating button. */
   fabClearance?: boolean;
+  /** A minimum bottom padding, for another floating element (the undo snackbar). */
+  bottomClearance?: number;
   /** True (default) for the tab screens: the navigator already keeps the tab bar and the bottom inset out of the way. */
   belowTabBar?: boolean;
   /** Lets a screen scroll a warning into view. */
@@ -93,7 +96,7 @@ export function Screen({
       contentContainerStyle={{
         paddingHorizontal: theme.spacing.lg,
         paddingTop: theme.spacing.sm,
-        paddingBottom: screenBottomPadding(theme, { insetBottom: insets.bottom, belowTabBar, fabClearance }),
+        paddingBottom: screenBottomPadding(theme, { insetBottom: insets.bottom, belowTabBar, fabClearance, minimum: bottomClearance }),
         gap: theme.spacing.lg,
       }}
     >
@@ -135,6 +138,60 @@ export function StorageBanner() {
       )}>
         {tm(error)}
       </WarningNotice>
+    </View>
+  );
+}
+
+/**
+ * A floating snackbar anchored above the tab bar (see `snackbarGeometry`), so a short-lived notice with one action,
+ * like "Removed X. Undo", is visible however long the list behind it is. Render it as a sibling after a Screen inside
+ * a flex-1 wrapper. It is announced politely as a status (live region) and never takes focus. `onHold`/`onRelease`
+ * come from the action button (press-in or focus, and their end), so the owner can pause its auto-dismiss timer.
+ */
+export function Snackbar({
+  message,
+  actionLabel,
+  onAction,
+  onHold,
+  onRelease,
+  belowTabBar = true,
+  testID,
+}: {
+  message: string;
+  actionLabel: string;
+  onAction: () => void;
+  onHold?: () => void;
+  onRelease?: () => void;
+  belowTabBar?: boolean;
+  testID?: string;
+}) {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { bottom } = snackbarGeometry(theme, { insetBottom: insets.bottom, belowTabBar });
+  return (
+    <View
+      testID={testID}
+      role="status"
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={message}
+      style={{
+        position: 'absolute',
+        left: theme.spacing.lg,
+        right: theme.spacing.lg,
+        bottom,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.md,
+        padding: theme.spacing.md,
+        borderRadius: theme.radii.card,
+        borderWidth: borders.thin,
+        borderColor: borderStrong(theme),
+        backgroundColor: theme.colors.surface,
+        ...theme.shadows.floating,
+      }}
+    >
+      <AppText style={{ flex: 1 }}>{message}</AppText>
+      <SecondaryButton label={actionLabel} onPress={onAction} onHold={onHold} onRelease={onRelease} testID={testID ? `${testID}-action` : undefined} />
     </View>
   );
 }
@@ -318,10 +375,15 @@ export function SecondaryButton({
   onPress,
   testID,
   tone = 'default',
+  onHold,
+  onRelease,
 }: {
   label: string;
   onPress: () => void;
   testID?: string;
+  /** Press-in or focus (and its end below): lets a timer pause while the button is being used. */
+  onHold?: () => void;
+  onRelease?: () => void;
   /** `destructive` is for actions that erase data: an amber outline and amber label, clearly not the default button. */
   tone?: 'default' | 'destructive';
 }) {
@@ -332,6 +394,10 @@ export function SecondaryButton({
       testID={testID}
       accessibilityRole="button"
       onPress={onPress}
+      onPressIn={onHold}
+      onPressOut={onRelease}
+      onFocus={onHold}
+      onBlur={onRelease}
       style={({ pressed }) => ({
         minHeight: theme.sizes.minTouchTarget,
         borderRadius: theme.radii.button,
@@ -514,7 +580,7 @@ export function Field({
           placeholder={placeholder}
           placeholderTextColor={theme.colors.textSecondary}
           keyboardType={keyboard === 'default' ? 'default' : keyboard === 'number' ? 'number-pad' : 'decimal-pad'}
-          inputMode={keyboard === 'default' ? 'text' : 'decimal'}
+          inputMode={keyboard === 'default' ? 'text' : keyboard === 'number' ? 'numeric' : 'decimal'}
           style={[
             theme.typography.body,
             { flex: 1, color: theme.colors.textPrimary, paddingVertical: theme.spacing.md },

@@ -15,14 +15,14 @@ import { formatAmount, formatInputNumber, formatKcal, withUnit } from '@/src/lib
 import { useI18n } from '@/src/i18n/react';
 import { msg } from '@/src/i18n/msg';
 import type { Msg } from '@/src/i18n/types';
-import { entryFromPer100, entryFromTotals, scalePortion } from '@/src/lib/logging';
+import { entryFromPer100, entryFromTotals, previewPortion, scalePortion } from '@/src/lib/logging';
 import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
 import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { MacroTokens } from '@/src/components/MacroTokens';
-import { borders, borderStrong, icons, marks, strokes } from '@/src/theme/extras';
-import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, WarningLine, WarningNotice, useDebounced, type Scroller } from '@/src/components/ui';
+import { borders, borderStrong, icons, marks, snackbarGeometry, strokes } from '@/src/theme/extras';
+import { AppText, Card, Chip, Field, PrimaryButton, Screen, SecondaryButton, Snackbar, WarningLine, WarningNotice, useDebounced, type Scroller } from '@/src/components/ui';
 import { errorKeys } from '@/src/lib/scroll';
 import { useFormScroll } from '@/src/lib/formScroll';
 
@@ -74,6 +74,7 @@ export default function LogScreen() {
   const [shown, setShown] = useState(SEARCH_PAGE_SIZE);
   useEffect(() => setShown(SEARCH_PAGE_SIZE), [debounced]);
   const [undo, setUndo] = useState<{ entry: LogEntry; index: number } | null>(null);
+  const [undoHeld, setUndoHeld] = useState(false);
   const [quickWarning, setQuickWarning] = useState<Msg | null>(null);
   // Editing any quick-add number withdraws the warning so it never describes stale numbers.
   useEffect(() => setQuickWarning(null), [quickName, quickKcal, quickP, quickC, quickF, quickFiber, quickGrams]);
@@ -276,11 +277,20 @@ export default function LogScreen() {
     const removed = await deleteLog(entry.id);
     if (!removed) return;
     setUndo(removed);
-    setTimeout(() => setUndo((current) => (current?.entry.id === removed.entry.id ? null : current)), motion.toast);
   }
 
+  // The snackbar goes away on its own after motion.toast, but not while its Undo button is pressed or focused.
+  // Letting go restarts the full time. A second delete replaces the snackbar and restarts it too.
+  useEffect(() => {
+    if (!undo) { setUndoHeld(false); return; }
+    if (undoHeld) return;
+    const timer = setTimeout(() => setUndo(null), motion.toast);
+    return () => clearTimeout(timer);
+  }, [undo, undoHeld]);
+
+  // No preview for grams the Add button would refuse (-5, 0, over 5,000): nothing to show beats a negative figure.
   const preview = selected
-    ? scalePortion(
+    ? previewPortion(
         { kcal: selected.kcalPer100g, protein: selected.proteinPer100g, carbs: selected.carbsPer100g, fat: selected.fatPer100g, fiber: selected.fiberPer100g },
         parseDecimal(gramsText),
       )
@@ -297,7 +307,8 @@ export default function LogScreen() {
   };
 
   return (
-    <Screen testID="screen-log" scrollRef={scrollRef}>
+    <View style={{ flex: 1 }}>
+    <Screen testID="screen-log" scrollRef={scrollRef} bottomClearance={undo ? snackbarGeometry(theme, { insetBottom: 0, belowTabBar: true }).contentPaddingBottom : undefined}>
       <AppText variant="title">{t('log.title')}</AppText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
         {MEALS.map((option) => (
@@ -338,7 +349,7 @@ export default function LogScreen() {
           </View>
           {preview ? (
             <View style={{ gap: theme.spacing.xs }}>
-              <AppText variant="bodyMedium">{withUnit(formatKcal(preview.kcal), 'kcal')}</AppText>
+              <AppText variant="bodyMedium">{withUnit(formatKcal(displayKcal(preview.kcal)), 'kcal')}</AppText>
               <MacroTokens protein={preview.protein} carbs={preview.carbs} fat={preview.fat} />
               <AppText variant="caption" color={theme.colors.textSecondary}>{t('log.fiberPreview', { fiber: formatFiber(preview.fiber) })}</AppText>
             </View>
@@ -459,13 +470,18 @@ export default function LogScreen() {
           </View>
         </Card>
       ))}
-      {undo ? (
-        <Card>
-          <AppText>{t('log.removed', { name: undo.entry.name })}</AppText>
-          <SecondaryButton label={t('common.undo')} onPress={async () => { await restoreLog(undo.entry, undo.index); setUndo(null); }} />
-        </Card>
-      ) : null}
     </Screen>
+      {undo ? (
+        <Snackbar
+          testID="undo-snackbar"
+          message={t('log.removed', { name: undo.entry.name })}
+          actionLabel={t('common.undo')}
+          onAction={async () => { await restoreLog(undo.entry, undo.index); setUndo(null); }}
+          onHold={() => setUndoHeld(true)}
+          onRelease={() => setUndoHeld(false)}
+        />
+      ) : null}
+    </View>
   );
 }
 

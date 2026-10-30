@@ -208,6 +208,11 @@ export interface FfmiReading {
   banded: boolean;
 }
 
+/** The "bands come from male reference data" note only belongs under a result that shows bands for someone else. */
+export function showMaleReferenceNote(sex: Sex, reading: FfmiReading): boolean {
+  return reading.banded && sex !== 'male';
+}
+
 /**
  * Bands follow the science brief (men only), applied to the value rounded to 0.1
  * so the label matches the number on screen. Lower bound is inclusive.

@@ -6,7 +6,7 @@
  */
 import { msg } from '../../i18n/msg';
 import type { Msg } from '../../i18n/types';
-import { isAmbiguousThousands } from './nutrition';
+import { isAmbiguousThousands, parseDecimal } from './nutrition';
 
 export type OffsetDirection = 'deficit' | 'surplus';
 
@@ -25,7 +25,8 @@ export interface ParsedOffset {
 }
 
 const MINUS_SIGNS = /^[-\u2212\u2012\u2013\u2014]/;
-const PLAIN_NUMBER = /^(\d+([.,]\d+)?|[.,]\d+)$/;
+// The same body the shared parseDecimal accepts, minus its sign (the sign is read first, above): "80." is fine while typing.
+const PLAIN_NUMBER = /^(\d+([.,]\d*)?|[.,]\d+)$/;
 
 export function parseCustomOffset(raw: string, fallback: OffsetDirection = 'surplus'): ParsedOffset {
   const text = raw.replace(/\s/g, '');
@@ -57,8 +58,8 @@ export function parseCustomOffset(raw: string, fallback: OffsetDirection = 'surp
   if (isAmbiguousThousands(body)) {
     return { offset: 0, magnitude: 0, signedDirection, direction, empty: false, valid: false, message: msg('validate.noThousands') };
   }
-  const magnitude = Number(body.replace(',', '.'));
-  if (!Number.isFinite(magnitude)) {
+  const magnitude = parseDecimal(body);
+  if (magnitude == null) {
     return { offset: 0, magnitude: 0, signedDirection, direction, empty: false, valid: false, message: msg('offset.invalid') };
   }
   return {

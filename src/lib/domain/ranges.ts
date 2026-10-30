@@ -23,6 +23,21 @@ export const MEASURE_LIMITS = {
   age: { min: 18, max: 120 },
 } as const;
 
+/**
+ * The wider ranges older builds accepted. A stored height or weight inside them that the user does not touch is kept
+ * as is (so a 270 kg profile can still change its goal); outside them it must be typed again.
+ */
+export const LEGACY_STORED_LIMITS = {
+  height: { min: 100, max: 250 },
+  weight: { min: 30, max: 300 },
+} as const;
+
+/** True when an untouched stored cm / kg value may be kept without re-entering it. */
+export function inLegacyStoredRange(kind: 'height' | 'weight', value: number): boolean {
+  const range = LEGACY_STORED_LIMITS[kind];
+  return Number.isFinite(value) && value >= range.min && value <= range.max;
+}
+
 const EPS = 1e-9;
 
 /** The accepted range in the units the value is typed in (cm or in, kg or lb, years). */

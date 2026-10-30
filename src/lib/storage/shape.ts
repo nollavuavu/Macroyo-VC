@@ -19,7 +19,24 @@ type Rec = Record<string, unknown>;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const isOneOf = <T extends string>(allowed: readonly T[], value: unknown): value is T => typeof value === 'string' && (allowed as readonly string[]).includes(value);
-const isIsoDate = (value: unknown): boolean => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+const isIsoDate = (value: unknown): boolean => {
+  const match = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const real = new Date(Date.UTC(year, month - 1, day));
+  return year >= 1 && month >= 1 && month <= 12 && day >= 1 && real.getUTCMonth() === month - 1 && real.getUTCDate() === day;
+};
+/**
+ * Stored amounts are sanity-checked, not range-checked: negative, infinite or absurd numbers can only come from a
+ * damaged or hand-edited store, and loading them would feed targets like 15,500,001,480 kcal into the formulas.
+ * The ceilings are far above anything the app accepts (15,000 kcal target, 10,000 kcal entry, 2,000 g macros).
+ */
+export const STORED_MAX_KCAL = 100_000;
+export const STORED_MAX_GRAMS = 10_000;
+const isAmount = (max: number) => (value: unknown): boolean => isFiniteNumber(value) && value >= 0 && value <= max;
+const isKcal = isAmount(STORED_MAX_KCAL);
+const isGrams = isAmount(STORED_MAX_GRAMS);
+const isPositiveFinite = (value: unknown): boolean => isFiniteNumber(value) && value > 0;
 
 /** Throws `<where>.<field>` when a required field is missing or has the wrong type. */
 function need(where: string, record: Rec, field: string, ok: (value: unknown) => boolean, what: string): void {
@@ -48,7 +65,8 @@ function checkProfile(profile: Rec): void {
   need('profile', profile, 'sex', (v) => isOneOf(SEXES, v), 'female, male or unspecified');
   need('profile', profile, 'activity', (v) => isOneOf(Object.keys(ACTIVITY_FACTORS), v), 'a known activity level');
   need('profile', profile, 'goal', (v) => isOneOf(GOALS, v), 'cut, maintain or bulk');
-  for (const field of ['age', 'heightCm', 'weightKg']) need('profile', profile, field, isFiniteNumber, 'a number');
+  need('profile', profile, 'age', isFiniteNumber, 'a number');
+  for (const field of ['heightCm', 'weightKg']) need('profile', profile, field, isPositiveFinite, 'a positive number');
   maybe('profile', profile, 'bodyFatPct', isFiniteNumber, 'a number');
   maybe('profile', profile, 'units', (v) => isOneOf(UNITS, v), 'metric or imperial');
   maybe('profile', profile, 'appearance', (v) => isOneOf(APPEARANCES, v), 'system, light or dark');
@@ -59,8 +77,9 @@ function checkProfile(profile: Rec): void {
   maybe('profile', profile, 'onboardingComplete', isBoolean, 'true or false');
   const targets = profile.targets;
   if (!isRecord(targets)) throw new Error('stored profile.targets must be an object');
-  for (const field of ['kcal', 'proteinG', 'carbsG', 'fatG']) need('profile.targets', targets, field, isFiniteNumber, 'a number');
-  maybe('profile.targets', targets, 'fiberG', isFiniteNumber, 'a number');
+  need('profile.targets', targets, 'kcal', isKcal, `a number from 0 to ${STORED_MAX_KCAL}`);
+  for (const field of ['proteinG', 'carbsG', 'fatG']) need('profile.targets', targets, field, isGrams, `a number from 0 to ${STORED_MAX_GRAMS}`);
+  maybe('profile.targets', targets, 'fiberG', isGrams, `a number from 0 to ${STORED_MAX_GRAMS}`);
   maybe('profile.targets', targets, 'custom', isBoolean, 'true or false');
 }
 
@@ -71,10 +90,9 @@ function checkLog(entry: Rec, index: number): void {
   need(where, entry, 'date', isIsoDate, 'a YYYY-MM-DD date');
   need(where, entry, 'meal', (v) => isOneOf(MEALS, v), 'a meal');
   need(where, entry, 'name', isString, 'a string');
-  for (const field of ['grams', 'kcal', 'proteinG', 'carbsG', 'fatG']) {
-    need(where, entry, field, isFiniteNumber, 'a number');
-  }
-  maybe(where, entry, 'fiberG', isFiniteNumber, 'a number');
+  need(where, entry, 'kcal', isKcal, `a number from 0 to ${STORED_MAX_KCAL}`);
+  for (const field of ['grams', 'proteinG', 'carbsG', 'fatG']) need(where, entry, field, isGrams, `a number from 0 to ${STORED_MAX_GRAMS}`);
+  maybe(where, entry, 'fiberG', isGrams, `a number from 0 to ${STORED_MAX_GRAMS}`);
   // Per-100 g values are only used to rescale on edit; a missing or null one must not block the whole diary.
   for (const field of ['kcalPer100', 'proteinPer100', 'carbsPer100', 'fatPer100', 'fiberPer100']) maybe(where, entry, field, isFiniteNumber, 'a number');
   maybe(where, entry, 'foodId', isString, 'a string');
@@ -85,7 +103,8 @@ function checkBodyStat(stat: Rec, index: number): void {
   const where = `bodyStats[${index}]`;
   need(where, stat, 'id', (v) => isString(v) && v !== '', 'a non-empty string');
   need(where, stat, 'date', isIsoDate, 'a YYYY-MM-DD date');
-  for (const field of ['weightKg', 'heightCm', 'bmi']) need(where, stat, field, isFiniteNumber, 'a number');
+  for (const field of ['weightKg', 'heightCm']) need(where, stat, field, isPositiveFinite, 'a positive number');
+  need(where, stat, 'bmi', isFiniteNumber, 'a number');
   for (const field of ['bodyFatPct', 'ffmi', 'normalizedFfmi']) maybe(where, stat, field, isFiniteNumber, 'a number');
 }
 

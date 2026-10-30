@@ -1,4 +1,4 @@
-import { roundHalfUp1, scaleHalfUp1 } from './domain';
+import { roundHalfUp1, scaleHalfUp1, validatePortionGrams } from './domain';
 import { uid, type Meal } from './dates';
 import type { LogEntry } from './storage/types';
 
@@ -72,6 +72,18 @@ export function scalePortion(
     fat: scaleHalfUp1(per100.fat, g),
     fiber: per100.fiber == null ? null : scaleHalfUp1(per100.fiber, g),
   };
+}
+
+/**
+ * The preview under the grams field: the scaled portion, or null while the grams are not an amount the Add button
+ * would accept (missing, 0 or negative, over the limit). Same rule as the save, so a preview never promises an entry
+ * that cannot be added.
+ */
+export function previewPortion(
+  per100: { kcal: number; protein: number; carbs: number; fat: number; fiber: number | null },
+  grams: number | null,
+): PortionMacros | null {
+  return validatePortionGrams(grams).ok ? scalePortion(per100, grams) : null;
 }
 
 /** Entry from typed totals for a portion (quick add, or an edited entry). Totals are stored exactly as typed. */

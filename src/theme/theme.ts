@@ -295,8 +295,8 @@ export const motion = {
   fill: 600,
   /** Smooth value updates when a food is added. */
   update: 250,
-  /** Undo toast visibility. */
-  toast: 4000,
+  /** Undo snackbar visibility. Long enough to read, reach and press; paused while the snackbar is held or focused. */
+  toast: 6000,
   /** Search input debounce. */
   searchDebounce: 250,
   /** Sheet spring damping ratio. */

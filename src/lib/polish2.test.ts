@@ -103,7 +103,7 @@ describe('B P1-3: the floating button never covers the last row', () => {
     expect(fab.top - fab.bottom).toBe(theme.sizes.fab);
   });
   it('Screen and the button read the same geometry', () => {
-    expect(read('src/components/ui.tsx')).toMatch(/screenBottomPadding\(theme, \{ insetBottom: insets\.bottom, belowTabBar, fabClearance \}\)/);
+    expect(read('src/components/ui.tsx')).toMatch(/screenBottomPadding\(theme, \{ insetBottom: insets\.bottom, belowTabBar, fabClearance, minimum: bottomClearance \}\)/);
     expect(read('app/(tabs)/index.tsx')).toMatch(/bottom: fabGeometry\(theme\)\.bottom/);
   });
 });

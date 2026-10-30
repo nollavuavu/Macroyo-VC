@@ -100,14 +100,30 @@ export function fabGeometry(theme: { sizes: { fab: number }; spacing: { lg: numb
 }
 
 /**
+ * Where the undo snackbar floats. It is anchored above the tab bar: the navigator already keeps the bar and the bottom
+ * inset out of a tab screen, so `spacing.lg` of margin is enough there; a screen on the device edge adds the inset.
+ * `contentPaddingBottom` keeps the end of the list scrollable clear of it (one touch target of height plus padding).
+ */
+export function snackbarGeometry(
+  theme: { sizes: { minTouchTarget: number }; spacing: { lg: number; md: number } },
+  options: { insetBottom: number; belowTabBar: boolean },
+) {
+  const bottom = theme.spacing.lg + (options.belowTabBar ? 0 : options.insetBottom);
+  const height = theme.sizes.minTouchTarget + theme.spacing.md * 2;
+  return { bottom, height, contentPaddingBottom: bottom + height + theme.spacing.lg };
+}
+
+/**
  * Bottom padding of a Screen's scroll content. Inside the tab navigator the bar and the bottom inset are already
  * outside the screen, so only a normal margin (or the FAB clearance) is added. A screen outside the tabs
  * (onboarding) sits on the device edge and adds the inset itself.
  */
 export function screenBottomPadding(
   theme: { sizes: { fab: number }; spacing: { lg: number; xxxl: number } },
-  options: { insetBottom: number; belowTabBar: boolean; fabClearance: boolean },
+  options: { insetBottom: number; belowTabBar: boolean; fabClearance: boolean; minimum?: number },
 ): number {
-  if (options.fabClearance) return fabGeometry(theme).contentPaddingBottom;
-  return options.belowTabBar ? theme.spacing.xxxl : options.insetBottom + theme.spacing.xxxl;
+  const base = options.fabClearance
+    ? fabGeometry(theme).contentPaddingBottom
+    : options.belowTabBar ? theme.spacing.xxxl : options.insetBottom + theme.spacing.xxxl;
+  return Math.max(base, options.minimum ?? 0);
 }

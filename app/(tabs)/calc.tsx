@@ -11,6 +11,7 @@ import {
   type SexConstantChoice,
   ffmiValue,
   interpretFfmi,
+  showMaleReferenceNote,
   leanMassKg,
   normalizedFfmi,
   parseDecimal,
@@ -217,7 +218,7 @@ export default function CalcScreen() {
               <AppText variant="secondary" color={theme.colors.textSecondary}>{t('calc.ffmi.normalized', { value: formatFixed(nffmi, 1) })}</AppText>
               <AppText variant="section" color={theme.colors.primary}>{tm(ffmiReading.label)}</AppText>
               <AppText variant="caption" color={theme.colors.textSecondary}>{tm(ffmiReading.detail)}</AppText>
-              {sex !== 'male' ? (
+              {showMaleReferenceNote(sex, ffmiReading) ? (
                 <AppText variant="caption" color={theme.colors.textSecondary}>{t('calc.ffmi.maleReference')}</AppText>
               ) : null}
               <AppText variant="caption" color={theme.colors.textSecondary}>
@@ -302,6 +303,7 @@ export default function CalcScreen() {
             onChangeText={setCustomText}
             placeholder={t('calc.customPlaceholder')}
           />
+          <AppText variant="caption" color={theme.colors.textSecondary}>{t('calc.customHint')}</AppText>
           {customText.trim() && !parsedCustom.valid ? (
             <WarningLine>{t('calc.customInvalid', { message: parsedCustom.message ? tm(parsedCustom.message) : '' })}</WarningLine>
           ) : null}

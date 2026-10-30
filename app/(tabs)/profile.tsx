@@ -18,6 +18,7 @@ import {
   normalizeFeetInches,
   targetNotices,
   valueUnlessUnchanged,
+  inLegacyStoredRange,
   type ActivityLevel,
   type BmrFormula,
   type Goal,
@@ -189,8 +190,10 @@ function BodyEditor({
 
   // Same range module as onboarding and Calc, in the profile's units. A value the user did not touch is kept as stored,
   // so a profile saved before the ranges were unified (e.g. 270 kg) can still change goal or activity.
-  const checkHeight = (value: number | null) => (value != null && value === profile.heightCm ? { ok: true, message: null } : validateHeightCm(value, profile.units));
-  const checkWeight = (value: number | null) => (value != null && value === profile.weightKg ? { ok: true, message: null } : validateWeightKg(value, profile.units));
+  // The exemption only covers values inside the old wide ranges (100-250 cm, 30-300 kg); anything else stored
+  // (0, -5, 1e9 ...) has to be typed again, so it can never be saved back unchanged.
+  const checkHeight = (value: number | null) => (value != null && value === profile.heightCm && inLegacyStoredRange('height', value) ? { ok: true, message: null } : validateHeightCm(value, profile.units));
+  const checkWeight = (value: number | null) => (value != null && value === profile.weightKg && inLegacyStoredRange('weight', value) ? { ok: true, message: null } : validateWeightKg(value, profile.units));
 
   // Live preview so the active formula, its BMR and the unspecified-sex note are always visible.
   const previewPlan = (() => {
