@@ -112,7 +112,7 @@ describe('foods_v2_i18n translations', () => {
     }
   });
 
-  it("applies Nacho's vi review: 44 of the 53 rows hold name_vi_new, the 9 intentional-English rows keep the English name", () => {
+  it("applies Nacho's vi review: 43 of the 53 rows hold name_vi_new, the 9 intentional-English rows keep the English name, and id 1013 keeps the standard 'hũ' spelling", () => {
     const csv = join(__dirname, '../../../../foods_v2_i18n_vi_review.csv');
     if (!existsSync(csv)) return;
     const lines = readFileSync(csv, 'utf8').replace(/^\ufeff/, '').split('\n').slice(1).filter(Boolean);
@@ -125,18 +125,21 @@ describe('foods_v2_i18n translations', () => {
       const row = byId.get(id)!;
       if (english.has(id)) {
         expect(row.name_vi, id).toBe(row.name);
+      } else if (id === '1013') {
+        // Gus: the standard spelling is 'Củ hũ dừa' (Heisenberg's), not the CSV's 'hủ'
+        expect(row.name_vi, id).toBe('Củ hũ dừa (hearts of palm), sống');
       } else {
         applied += 1;
         expect(line, id).toContain(row.name_vi);
       }
     }
-    expect(applied).toBe(44);
+    expect(applied).toBe(43);
   });
 
-  it('keeps the patty fix (id 23) and the corrected hearts-of-palm spelling (id 1013)', () => {
+  it('keeps the patty fix (id 23) and the standard hearts-of-palm spelling hũ (id 1013)', () => {
     const byId = new Map(raw.map((row) => [row.id, row]));
     expect(byId.get(23)!.name_vi).toBe('Miếng bò xay (patty) 85% nạc, nướng');
-    expect(byId.get(1013)!.name_vi).toBe('Củ hủ dừa (hearts of palm), sống');
+    expect(byId.get(1013)!.name_vi).toBe('Củ hũ dừa (hearts of palm), sống');
   });
 
   it('is the v2 catalog plus names: same ids in the same order, same English names and macros as the v2 source file', () => {
