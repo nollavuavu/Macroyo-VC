@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SEARCH_PAGE_SIZE, loadFoods, searchFoods, tokenize } from './foods';
@@ -9,7 +9,8 @@ const raw = JSON.parse(readFileSync(join(__dirname, '../../../assets/foods.json'
 
 const COLUMNS = [
   'carbs_per_100g', 'category', 'fat_per_100g', 'fdc_id', 'fiber_per_100g', 'id',
-  'kcal_per_100g', 'name', 'protein_per_100g', 'serving_label', 'serving_size_g', 'source',
+  'kcal_per_100g', 'name', 'name_fi', 'name_vi', 'needs_review', 'protein_per_100g', 'review_note',
+  'serving_label', 'serving_size_g', 'source',
 ];
 const SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS']);
 const CATEGORIES = new Set([
@@ -18,7 +19,7 @@ const CATEGORIES = new Set([
 ]);
 
 describe('foods_v2 schema', () => {
-  it('has 1,555 rows with exactly the 12 expected columns', () => {
+  it('has 1,555 rows with exactly the 16 expected columns (12 v2 columns plus name_vi, name_fi, needs_review, review_note)', () => {
     expect(raw).toHaveLength(1555);
     for (const row of raw) expect(Object.keys(row).sort()).toEqual(COLUMNS);
   });
@@ -66,6 +67,31 @@ describe('foods_v2 schema', () => {
 
   it('parses every row (the loader drops none)', () => {
     expect(loadFoods()).toHaveLength(raw.length);
+  });
+});
+
+describe('foods_v2_i18n translations', () => {
+  it('has a non-empty, trimmed, NFC name_vi and name_fi on every row, and a boolean needs_review', () => {
+    for (const row of raw) {
+      for (const key of ['name_vi', 'name_fi'] as const) {
+        const value = row[key];
+        expect(typeof value === 'string' && value.trim() !== '', `${row.id} ${key}`).toBe(true);
+        expect(value, `${row.id} ${key} trimmed`).toBe((value as string).trim());
+        expect((value as string).normalize('NFC'), `${row.id} ${key} NFC`).toBe(value);
+      }
+      expect(typeof row.needs_review, `${row.id}`).toBe('boolean');
+      expect(typeof row.review_note, `${row.id}`).toBe('string');
+    }
+  });
+
+  it('is the v2 catalog plus names: same ids in the same order, same English names and macros as the v2 source file', () => {
+    const v2 = join(__dirname, '../../../../foods_v2.json');
+    if (!existsSync(v2)) return; // the source file lives outside the repo; skip where it is absent
+    const source = JSON.parse(readFileSync(v2, 'utf8')) as Record<string, unknown>[];
+    expect(raw.map((row) => row.id)).toEqual(source.map((row) => row.id));
+    for (const [index, row] of source.entries()) {
+      for (const key of Object.keys(row)) expect(raw[index][key], `${row.id} ${key}`).toEqual(row[key]);
+    }
   });
 });
 
