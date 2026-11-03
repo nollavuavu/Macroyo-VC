@@ -71,11 +71,11 @@ describe('foods_v2 schema', () => {
 });
 
 describe('foods_v2_i18n translations', () => {
-  it('has a non-empty, trimmed, NFC name_vi and name_fi on every row, and a boolean needs_review', () => {
+  it('has name_vi and name_fi strings on every row: trimmed, NFC, and empty or equal to English where there is no local name', () => {
     for (const row of raw) {
       for (const key of ['name_vi', 'name_fi'] as const) {
         const value = row[key];
-        expect(typeof value === 'string' && value.trim() !== '', `${row.id} ${key}`).toBe(true);
+        expect(typeof value, `${row.id} ${key}`).toBe('string');
         expect(value, `${row.id} ${key} trimmed`).toBe((value as string).trim());
         expect((value as string).normalize('NFC'), `${row.id} ${key} NFC`).toBe(value);
       }

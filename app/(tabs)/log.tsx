@@ -16,7 +16,7 @@ import { useI18n } from '@/src/i18n/react';
 import { msg } from '@/src/i18n/msg';
 import type { Msg } from '@/src/i18n/types';
 import { entryFromPer100, entryFromTotals, previewPortion, scalePortion } from '@/src/lib/logging';
-import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
+import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, warmSearchIndex, type Food } from '@/src/lib/foods/foods';
 import { entryDisplayName, entryNameIsUnchanged, foodName } from '@/src/lib/foods/names';
 import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
@@ -92,7 +92,9 @@ export default function LogScreen() {
   useEffect(() => { if (!quickWarningShown) form.forget('quick.warning'); }, [form, quickWarningShown]);
   useEffect(() => { if (!editWarningShown) form.forget('portion.warning'); }, [form, editWarningShown]);
 
-  const allResults = useMemo(() => searchFoods(foods, debounced, foods.length), [debounced]);
+  // Search matches English plus the app language, ignoring accents; keys are built once per language.
+  useEffect(() => { warmSearchIndex(foods, locale); }, [locale]);
+  const allResults = useMemo(() => searchFoods(foods, debounced, foods.length, locale), [debounced, locale]);
   const results = allResults.slice(0, shown);
   const dayEntries = data.logs.filter((entry) => entry.date === date && entry.meal === meal);
 
