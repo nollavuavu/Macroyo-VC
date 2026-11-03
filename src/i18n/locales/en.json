@@ -338,7 +338,7 @@
   "profile.title": "Profile",
   "profile.finishOnboarding": "Finish onboarding to edit your targets.",
   "profile.language": "Language",
-  "profile.languageHint": "System follows your device language. Food names stay in English.",
+  "profile.languageHint": "System follows your device language. Foods without a local name keep their English name.",
   "profile.appearance": "Appearance",
   "profile.units": "Units",
   "profile.storedBody": "Stored height {{height}}\u00a0cm · weight {{weight}}\u00a0kg. Switching units only changes the display.",

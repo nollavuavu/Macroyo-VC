@@ -174,7 +174,7 @@ function renderChain(segments: Segment[], connectors: string[], context: Context
       .join('');
   }
   // Shared noun: "small or thin slice", "regular/thin slice", "small/regular fillet".
-  if (withNoun.length === 1 && info[info.length - 1] === withNoun[0]) {
+  if (withNoun.length === 1 && info[info.length - 1] === withNoun[0] && info[info.length - 1].adjs.length > 0) {
     const last = info[info.length - 1];
     const noun = head(last.nouns, last.lits, context);
     const adjText = info.map((item, index) => item.adjs.join(' ') + (index < info.length - 1 ? joiner(index) : '')).join('');
@@ -184,6 +184,16 @@ function renderChain(segments: Segment[], connectors: string[], context: Context
   if (withNoun.length === 0) {
     const text = info.map((item, index) => item.adjs.join(' ') + (index < info.length - 1 ? joiner(index) : '')).join('');
     return lang === 'vi' && context.count != null && !context.afterMeasure ? `cái ${text}` : text;
+  }
+  // Adjectives standing alone next to a bare noun: "solid or chunks", "whole or halves". Each part is its own alternative.
+  if (withNoun.length >= 1 && info.length > 1) {
+    return info
+      .map((item, index) => {
+        const noun = head(item.nouns, item.lits, context);
+        const text = lang === 'vi' ? [noun, ...item.adjs].filter(Boolean).join(' ') : [...item.adjs, noun].filter(Boolean).join(' ');
+        return text + (index < info.length - 1 ? joiner(index) : '');
+      })
+      .join('');
   }
   throw new Unparsed('mixed coordination');
 }

@@ -150,14 +150,13 @@ describe('P2-8 soft hyphens in the longest Finnish compounds', () => {
   });
 });
 
-describe('P2-10 search hint and placeholder around the English example', () => {
-  it('vi and fi explain that food names are English; the example itself stays quoted English', () => {
-    expect(fi['log.searchPlaceholder']).toBe('Englanniksi, esim. ”baked bacon”');
-    expect(vi['log.searchPlaceholder']).toBe('Thử “baked bacon”'); // the hint below says the names are English
-    for (const catalog of [fi, vi]) {
-      expect(catalog['log.searchHint_other']).toContain('baked bacon');
-      expect(catalog['log.searchHint_other']).toContain('Bacon, baked');
-      expect(catalog['log.searchHint_other']).not.toMatch(/\bUSDA names\b|\bTry\b/);
+describe('P2-10 / QA-19 search hint and placeholder use the local language', () => {
+  it('vi and fi give a local-language example and say you can search in the app language or English', () => {
+    expect(fi['log.searchPlaceholder']).toBe('Kokeile ”kaurapuuro”');
+    expect(vi['log.searchPlaceholder']).toBe('Thử “bánh mì”');
+    for (const key of ['log.searchHint_one', 'log.searchHint_other'] as const) {
+      expect(vi[key]).toMatch(/tiếng Việt hoặc tiếng Anh/);
+      expect(fi[key]).toMatch(/suomeksi tai englanniksi/);
     }
     expect(fi['log.searchHint_one']).toContain('{{count}} ruoan');
   });

@@ -150,6 +150,44 @@ describe('serving labels: fallback to English', () => {
   });
 });
 
+describe('serving labels: QA-20 or-chains and a guard over the whole catalog', () => {
+  it('"solid or chunks" and "whole or halves" keep both parts and the conjunction in the middle', () => {
+    expect(vi('1 cup, solid or chunks')).toBe('1 cốc, đặc hoặc miếng lớn');
+    expect(fi('1 cup, solid or chunks')).toBe('1 kuppi, kiinteä tai kimpaleet');
+    expect(vi('1 cup, whole or halves')).toBe('1 cốc, nguyên hoặc nửa');
+    expect(fi('1 cup, whole or halves')).toBe('1 kuppi, kokonainen tai puolikkaat');
+  });
+
+  it('the shared-noun branch still shares one noun: "small or thin slice"', () => {
+    expect(vi('1 small or thin slice')).toBe('1 lát nhỏ hoặc mỏng');
+    expect(fi('1 small or thin slice')).toBe('1 pieni tai ohut viipale');
+  });
+
+  const CONJUNCTION = { vi: /^(hoặc|và)$/, fi: /^(tai|ja)$/ } as const;
+  for (const lang of ['vi', 'fi'] as const) {
+    it(`every translated catalog label in ${lang} is clean: no stray spaces, empty parts or dangling conjunctions`, () => {
+      let translated = 0;
+      for (const label of new Set(labels)) {
+        if (!label) continue;
+        const out = translateServingLabel(label, lang);
+        if (out == null) continue;
+        translated += 1;
+        const where = `${lang}: [${label}] -> [${out}]`;
+        expect(out, where).toBe(out.trim());
+        expect(out, where).not.toMatch(/\s{2,}/);
+        expect(out, where).not.toMatch(/(^|[\s(,])(hoặc|và|tai|ja)(\s*$|\s*[,)])/);
+        expect(out, where).not.toMatch(/^(hoặc|và|tai|ja)\s/);
+        expect(out, where).not.toMatch(/,\s*,|\(\s*\)|^\s*,|,\s*$|\s,|\(\s|\s\)|\/\s|\s\/(?!\d)/);
+        // empty parts (",,", "()", "a/ /b") are caught above; here no part may be only a conjunction
+        for (const part of out.split(/[,()/]/)) {
+          expect(part.trim(), where).not.toMatch(CONJUNCTION[lang]);
+        }
+      }
+      expect(translated).toBeGreaterThan(320);
+    });
+  }
+});
+
 describe('serving label word tables', () => {
   it('give every noun a Vietnamese word and the Finnish forms', () => {
     for (const [word, entry] of ENTRIES) {
