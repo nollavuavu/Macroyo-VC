@@ -18,6 +18,7 @@ import type { Msg } from '@/src/i18n/types';
 import { entryFromPer100, entryFromTotals, previewPortion, scalePortion } from '@/src/lib/logging';
 import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, warmSearchIndex, type Food } from '@/src/lib/foods/foods';
 import { entryDisplayName, entryNameIsUnchanged, foodName } from '@/src/lib/foods/names';
+import { servingLabelFor } from '@/src/lib/foods/servingLabel';
 import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
@@ -337,7 +338,7 @@ export default function LogScreen() {
           <AppText variant="section">{editing ? entryDisplayName(editing, locale) : selected ? foodName(selected, locale) : ''}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {editing ? t('log.editingEntry') : t('log.kcalPer100', { kcal: formatAmount(selected?.kcalPer100g ?? 0, 0) })}
-            {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${withUnit(formatAmount(selected.servingSizeG), 'g')})` : ''}
+            {selected?.servingLabel && selected.servingSizeG ? ` · ${servingLabelFor(selected.servingLabel, locale)} (${withUnit(formatAmount(selected.servingSizeG), 'g')})` : ''}
           </AppText>
           {editing && edit ? (
             <Field label={t('common.name')} value={edit.name} onChangeText={(value) => { setEdit({ ...edit, name: value }); setEditErrors((current) => withoutFieldError(current, 'name')); }} error={text(editErrors.name)} keyboard="default" onLayout={form.field('portion.name', 'portionCard')} />
@@ -345,7 +346,7 @@ export default function LogScreen() {
           <Field label={t('log.grams')} value={gramsText} onChangeText={(value) => { setGramsText(value); setFormError(null); setEditErrors((current) => withoutFieldError(current, 'grams')); }} suffix="g" error={text(formError ?? editErrors.grams)} onLayout={form.field('portion.grams', 'portionCard')} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {selected?.servingSizeG ? (
-              <Chip label={selected.servingLabel ?? t('log.serving')} detail={withUnit(formatAmount(selected.servingSizeG), 'g')} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
+              <Chip label={servingLabelFor(selected.servingLabel, locale) ?? t('log.serving')} detail={withUnit(formatAmount(selected.servingSizeG), 'g')} selected={gramsText === formatInputNumber(selected.servingSizeG)} onPress={() => setGramsText(formatInputNumber(selected.servingSizeG ?? 100))} />
             ) : null}
             {[50, 100, 150, 200].map((grams) => (
               <Chip key={grams} label={withUnit(String(grams), 'g')} selected={gramsText === formatInputNumber(grams) && gramsText !== (selected?.servingSizeG ? formatInputNumber(selected.servingSizeG) : '')} onPress={() => setGramsText(formatInputNumber(grams))} />
