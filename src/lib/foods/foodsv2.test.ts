@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SEARCH_PAGE_SIZE, loadFoods, searchFoods, tokenize } from './foods';
+import { foodName } from './names';
 import { entryFromPer100 } from '../logging';
 
 /** foods_v2.json schema check, run on the raw asset so a bad swap fails before the parser can hide it. */
@@ -9,7 +10,7 @@ const raw = JSON.parse(readFileSync(join(__dirname, '../../../assets/foods.json'
 
 const COLUMNS = [
   'carbs_per_100g', 'category', 'fat_per_100g', 'fdc_id', 'fiber_per_100g', 'id',
-  'kcal_per_100g', 'name', 'name_fi', 'name_vi', 'needs_review', 'protein_per_100g', 'review_note',
+  'kcal_per_100g', 'name', 'name_fi', 'name_vi', 'protein_per_100g',
   'serving_label', 'serving_size_g', 'source',
 ];
 const SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS']);
@@ -19,7 +20,7 @@ const CATEGORIES = new Set([
 ]);
 
 describe('foods_v2 schema', () => {
-  it('has 1,555 rows with exactly the 16 expected columns (12 v2 columns plus name_vi, name_fi, needs_review, review_note)', () => {
+  it('has 1,555 rows with exactly the 14 expected columns (12 v2 columns plus name_vi, name_fi; review metadata is not bundled)', () => {
     expect(raw).toHaveLength(1555);
     for (const row of raw) expect(Object.keys(row).sort()).toEqual(COLUMNS);
   });
@@ -79,8 +80,35 @@ describe('foods_v2_i18n translations', () => {
         expect(value, `${row.id} ${key} trimmed`).toBe((value as string).trim());
         expect((value as string).normalize('NFC'), `${row.id} ${key} NFC`).toBe(value);
       }
-      expect(typeof row.needs_review, `${row.id}`).toBe('boolean');
-      expect(typeof row.review_note, `${row.id}`).toBe('string');
+      expect(row, `${row.id}`).not.toHaveProperty('needs_review');
+      expect(row, `${row.id}`).not.toHaveProperty('review_note');
+    }
+  });
+
+  it('keeps intentional English names: a translation equal to the English name is valid, shown as is and found by search', () => {
+    const same = raw.filter((row) => row.name_vi === row.name || row.name_fi === row.name);
+    expect(same.length).toBeGreaterThan(100);
+    const foods = loadFoods();
+    for (const row of same.slice(0, 40)) {
+      const food = foods.find((item) => item.id === String(row.id))!;
+      for (const locale of ['en', 'vi', 'fi'] as const) {
+        expect(foodName(food, locale).length).toBeGreaterThan(0);
+        expect(searchFoods(foods, food.name, 5000, locale).some((hit) => hit.id === food.id), `${row.id} ${locale}`).toBe(true);
+      }
+    }
+  });
+
+  it('every row listed in foods_v2_i18n_english_fallback.csv has the English name in that language', () => {
+    const csv = join(__dirname, '../../../../foods_v2_i18n_english_fallback.csv');
+    if (!existsSync(csv)) return;
+    const lines = readFileSync(csv, 'utf8').replace(/^\ufeff/, '').split('\n').slice(1).filter(Boolean);
+    expect(lines.length).toBeGreaterThan(100);
+    const byId = new Map(raw.map((row) => [String(row.id), row]));
+    for (const line of lines) {
+      const id = line.split(',')[0];
+      const language = /,(vi|fi),/.exec(line)?.[1] as 'vi' | 'fi';
+      const row = byId.get(id)!;
+      expect(row[`name_${language}`], `${id} ${language}`).toBe(row.name);
     }
   });
 

@@ -122,40 +122,58 @@ describe('ranking', () => {
 });
 
 describe('regional Vietnamese synonyms', () => {
-  const find = (query: string) => names(query, 'vi', 100);
+  // Synthetic rows, so these tests do not depend on how the translation file words a name today.
+  const VI = [
+    'Dứa, tươi', 'Dưa hấu, tươi', 'Dưa leo, có vỏ, sống', 'Dưa chuột muối chua (dill pickles)', 'Thịt heo xay, sống', 'Mỡ lợn',
+    'Bắp ngọt, luộc', 'Bắp cải, luộc', 'Bắp rang caramel', 'Bột ngô', 'Bí ngô, sống', 'Đậu cô ve, sống', 'Chanh dây, tươi',
+    'Ngò tây, tươi', 'Ngò rí, tươi', 'Súp lơ, sống', 'Hành tím nhỏ, sống', 'Khoai mì, sống', 'Gạo thơm, nấu chín', 'Cải bruxen, luộc',
+  ];
+  const rows = parseFoods(VI.map((name, index) => ({ id: String(index + 1), name: `Food ${index + 1}`, name_vi: name, kcal: 1, protein: 1, carbs: 1, fat: 1 })));
+  const find = (query: string) => searchFoods(rows, query, 100, 'vi').map((food) => food.names.vi);
 
-  it('indexes the glossary groups: pineapple dứa/thơm/khóm', () => {
+  it('indexes the glossary groups, including groups of three: dứa / thơm / khóm', () => {
     for (const query of ['dứa', 'thơm', 'thom', 'khóm', 'khom']) expect(find(query), query).toContain('Dứa, tươi');
+    expect(find('khom tuoi')).toEqual(['Dứa, tươi']);
+  });
+
+  it('supports groups of any size, not just pairs', () => {
+    expect((SYNONYM_GROUPS.vi ?? []).some((group) => group.length >= 3)).toBe(true);
+    const three = synonymPhrases('Dứa, tươi', 'vi');
+    expect(three).toEqual(['thom tuoi', 'khom tuoi']);
   });
 
   it('does not mix up dứa (pineapple) and dưa (melon) when adding synonyms', () => {
     expect(find('thom')).not.toContain('Dưa hấu, tươi');
-    expect(find('khom').every((name) => /^Dứa|dứa/.test(name))).toBe(true);
+    expect(find('khom')).toEqual(['Dứa, tươi']);
   });
 
   it('cucumber is two-way: dưa leo <-> dưa chuột', () => {
-    for (const query of ['dua leo', 'dưa chuột', 'dua chuot']) expect(find(query), query).toContain('Dưa leo, có vỏ, sống');
-    expect(find('dưa chuột muối chua')).toContain('Dưa chuột muối chua (dill pickles)');
-    expect(find('dua leo muoi chua')).toContain('Dưa chuột muối chua (dill pickles)');
+    for (const query of ['dua leo', 'dưa chuột', 'dua chuot']) {
+      expect(find(query), query).toEqual(expect.arrayContaining(['Dưa leo, có vỏ, sống', 'Dưa chuột muối chua (dill pickles)']));
+    }
+    expect(synonymPhrases('Dưa leo, có vỏ, sống', 'vi')).toEqual(['dua chuot co vo song']);
+    expect(synonymPhrases('Dưa chuột muối chua', 'vi')).toEqual(['dua leo muoi chua']);
   });
 
   it('pork is two-way: heo <-> lợn', () => {
     expect(find('thit lon xay')).toContain('Thịt heo xay, sống');
     expect(find('mỡ heo')).toContain('Mỡ lợn');
     expect(find('mo heo')).toContain('Mỡ lợn');
-    expect(find('lợn')).toContain('Thịt heo hầm');
-    expect(find('heo')).toContain('Mỡ lợn');
+    expect(find('lợn')).toEqual(expect.arrayContaining(['Thịt heo xay, sống', 'Mỡ lợn']));
+    expect(find('heo')).toEqual(expect.arrayContaining(['Thịt heo xay, sống', 'Mỡ lợn']));
   });
 
   it('corn is two-way: bắp <-> ngô', () => {
-    expect(find('bap ngot')).toContain('Bắp ngọt, luộc');
     expect(find('ngo ngot')).toContain('Bắp ngọt, luộc');
+    expect(find('bap ngot')).toContain('Bắp ngọt, luộc');
     expect(find('ngô rang')).toContain('Bắp rang caramel');
     expect(find('bắp rang')).toContain('Bắp rang caramel');
+    expect(find('bap bot')).toContain('Bột ngô');
+    expect(find('bột bắp')).toContain('Bột ngô');
   });
 
   it('corn synonyms do not turn cabbage into corn or pumpkin into corn', () => {
-    expect(find('ngo cai')).not.toContain('Bắp cải, luộc');
+    expect(find('ngo cai')).toEqual([]);
     expect(find('ngo')).not.toContain('Bắp cải, luộc');
     expect(synonymPhrases('Bắp cải, luộc', 'vi')).toEqual([]);
     expect(synonymPhrases('Bí ngô, sống', 'vi')).toEqual(['bi do song']);
@@ -163,20 +181,29 @@ describe('regional Vietnamese synonyms', () => {
     expect(find('bí ngô')).toContain('Bí ngô, sống');
   });
 
-  it('other glossary groups work: green beans, passion fruit, parsley, cilantro, cauliflower, shallot, cassava', () => {
+  it('other glossary groups work: green beans, passion fruit, parsley, cilantro, cauliflower, shallot, cassava, Brussels sprouts', () => {
     expect(find('dau que')).toContain('Đậu cô ve, sống');
     expect(find('chanh leo')).toContain('Chanh dây, tươi');
-    expect(find('mui tay')).toContain('Ngò tây (mùi tây), tươi');
-    expect(find('rau mui')).toContain('Ngò rí (rau mùi), tươi');
-    expect(find('bong cai trang')).toContain('Súp lơ (bông cải trắng), sống');
-    expect(find('hanh kho')).toContain('Hành tím nhỏ (shallot), sống');
-    expect(find('san')).toContain('Khoai mì (sắn), sống');
+    expect(find('mui tay')).toContain('Ngò tây, tươi');
+    expect(find('rau mui')).toContain('Ngò rí, tươi');
+    expect(find('bong cai trang')).toContain('Súp lơ, sống');
+    expect(find('hanh kho')).toContain('Hành tím nhỏ, sống');
+    expect(find('san')).toContain('Khoai mì, sống');
+    expect(find('bap cai mini')).toContain('Cải bruxen, luộc');
   });
 
   it('ambiguous words are searched but not used to add alternatives', () => {
     expect(NOT_A_SOURCE.has('thơm')).toBe(true);
     expect(synonymPhrases('Gạo thơm, nấu chín', 'vi')).toEqual([]);
+    expect(find('dứa')).not.toContain('Gạo thơm, nấu chín');
+    expect(find('thơm')).toContain('Gạo thơm, nấu chín');
     expect(Object.keys(BLOCKED_COMPOUNDS)).toContain('bắp');
+  });
+
+  it('works on the real catalog too: dứa/thơm/khóm find the pineapple', () => {
+    for (const query of ['dứa', 'thơm', 'khóm']) {
+      expect(searchFoods(foods, query, 50, 'vi').some((food) => food.name === 'Pineapple, raw'), query).toBe(true);
+    }
   });
 
   it('synonyms only apply in Vietnamese', () => {
@@ -185,7 +212,7 @@ describe('regional Vietnamese synonyms', () => {
     expect(synonymPhrases('Dứa, tươi', 'fi')).toEqual([]);
   });
 
-  it('every glossary group has at least two words and no duplicates', () => {
+  it('every group has at least two words and no duplicates', () => {
     for (const group of SYNONYM_GROUPS.vi ?? []) {
       expect(group.length).toBeGreaterThanOrEqual(2);
       expect(new Set(group.map((word) => foldText(word))).size).toBe(group.length);
