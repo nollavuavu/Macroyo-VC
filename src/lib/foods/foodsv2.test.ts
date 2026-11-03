@@ -144,7 +144,7 @@ describe('logged entries are snapshots, not references', () => {
     expect(entry.fatPer100).toBe(food.fatPer100g);
     expect(entry.fiberPer100).toBe(food.fiberPer100g);
     expect(entry.kcal).toBeGreaterThanOrEqual(0);
-    // The id is only a loose reference: nothing reads it back from the catalog.
+    // The id is only a loose reference for the display name: macros and totals are never read back from the catalog.
     expect(JSON.stringify(entry)).toContain(food.name);
   });
 });

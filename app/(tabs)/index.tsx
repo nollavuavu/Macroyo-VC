@@ -7,6 +7,7 @@ import { displayKcal, displayKcalTotal, progressRatio, sumLogged } from '@/src/l
 import { MEALS, MEAL_KEY, addDays, dayAccessibilityLabel, formatLongDate, weekDates, weekdayNarrow, type Meal } from '@/src/lib/dates';
 import { NBSP, formatAmount, formatKcal, formatPercent, withUnit } from '@/src/lib/format';
 import { formatFiber } from '@/src/lib/foods/foods';
+import { entryDisplayName } from '@/src/lib/foods/names';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
 import { useI18n } from '@/src/i18n/react';
@@ -24,7 +25,7 @@ const MACRO_ICON = {
 
 export default function TodayScreen() {
   const theme = useTheme();
-  const { t, tm } = useI18n();
+  const { t, tm, locale } = useI18n();
   const { data, addLog, selectedDate: date, setSelectedDate: setDate } = useApp();
   const profile = data.profile;
   const [toast, setToast] = useState<Msg | null>(null);
@@ -153,7 +154,7 @@ export default function TodayScreen() {
                 </View>
                 {items.map((item) => (
                   <View key={item.id} style={{ paddingVertical: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
-                    <AppText>{item.name}</AppText>
+                    <AppText>{entryDisplayName(item, locale)}</AppText>
                     <AppText variant="caption" color={theme.colors.textSecondary}>
                       {t('today.itemDetail', { grams: formatAmount(item.grams), kcal: formatKcal(displayKcal(item.kcal)), p: formatAmount(item.proteinG), c: formatAmount(item.carbsG), f: formatAmount(item.fatG), fiber: formatFiber(item.fiberG) })}
                     </AppText>

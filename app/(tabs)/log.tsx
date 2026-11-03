@@ -17,6 +17,7 @@ import { msg } from '@/src/i18n/msg';
 import type { Msg } from '@/src/i18n/types';
 import { entryFromPer100, entryFromTotals, previewPortion, scalePortion } from '@/src/lib/logging';
 import { SEARCH_PAGE_SIZE, formatFiber, loadFoods, searchFoods, type Food } from '@/src/lib/foods/foods';
+import { entryDisplayName, entryNameIsUnchanged, foodName } from '@/src/lib/foods/names';
 import { motion } from '@/src/theme/theme';
 import type { LogEntry } from '@/src/lib/storage/types';
 import { useApp, useTheme } from '@/src/state/AppContext';
@@ -46,7 +47,7 @@ interface EditFields {
 
 export default function LogScreen() {
   const theme = useTheme();
-  const { t, tm } = useI18n();
+  const { t, tm, locale } = useI18n();
   const text = (message?: Msg | null) => (message ? tm(message) : null);
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
   const { data, addLog, updateLog, deleteLog, restoreLog, selectedDate: date, setSelectedDate: setDate } = useApp();
@@ -108,7 +109,7 @@ export default function LogScreen() {
     setEditing(entry);
     setGramsText(formatInputNumber(entry.grams));
     setFormError(null);
-    setEdit({ name: entry.name, touched: false, kcal: '', protein: '', carbs: '', fat: '', fiber: '' });
+    setEdit({ name: entryDisplayName(entry, locale), touched: false, kcal: '', protein: '', carbs: '', fat: '', fiber: '' });
     setEditErrors({});
     setEditWarning(null);
   }
@@ -169,7 +170,8 @@ export default function LogScreen() {
     const macros = editedMacros();
     const fiberText = macros.fiber.trim();
     const input = {
-      name: edit.name,
+      // Unchanged text keeps the stored snapshot name (the field shows the translated name, the snapshot is not rewritten).
+      name: editing && entryNameIsUnchanged(editing, edit.name) ? editing.name : edit.name,
       kcal: parseDecimal(macros.kcal),
       proteinG: parseDecimal(macros.protein),
       carbsG: parseDecimal(macros.carbs),
@@ -330,7 +332,7 @@ export default function LogScreen() {
       {selected || editing ? (
         <View onLayout={form.group('portion')}>
         <Card style={{ gap: theme.spacing.md }} onLayout={form.group('portionCard', 'portion')}>
-          <AppText variant="section">{editing ? editing.name : selected?.name}</AppText>
+          <AppText variant="section">{editing ? entryDisplayName(editing, locale) : selected ? foodName(selected, locale) : ''}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {editing ? t('log.editingEntry') : t('log.kcalPer100', { kcal: formatAmount(selected?.kcalPer100g ?? 0, 0) })}
             {selected?.servingLabel && selected.servingSizeG ? ` · ${selected.servingLabel} (${withUnit(formatAmount(selected.servingSizeG), 'g')})` : ''}
@@ -419,7 +421,7 @@ export default function LogScreen() {
         <View style={{ gap: theme.spacing.sm }}>
           {results.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>{t('log.noMatches')}</AppText> : null}
           {results.map((food) => (
-            <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" accessibilityLabel={t('log.resultLabel', { name: food.name, kcal: formatKcal(food.kcalPer100g) })} style={{
+            <Pressable key={food.id} onPress={() => openFood(food)} accessibilityRole="button" accessibilityLabel={t('log.resultLabel', { name: foodName(food, locale), kcal: formatKcal(food.kcalPer100g) })} style={{
               backgroundColor: theme.colors.surface,
               borderRadius: theme.radii.card,
               borderWidth: borders.thin,
@@ -430,10 +432,10 @@ export default function LogScreen() {
               alignItems: 'center',
             }}>
               <View style={{ width: theme.sizes.thumbnail, height: theme.sizes.thumbnail, borderRadius: theme.radii.thumbnail, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                <AppText variant="bodyMedium" color={theme.colors.primary}>{food.name.slice(0, 1)}</AppText>
+                <AppText variant="bodyMedium" color={theme.colors.primary}>{foodName(food, locale).slice(0, 1)}</AppText>
               </View>
               <View style={{ flex: 1 }}>
-                <AppText>{food.name}</AppText>
+                <AppText>{foodName(food, locale)}</AppText>
                 <AppText variant="caption" color={theme.colors.textSecondary}>
                   {t('log.resultDetail', { kcal: formatKcal(food.kcalPer100g), fiber: formatFiber(food.fiberPer100g) })}
                 </AppText>
@@ -458,13 +460,13 @@ export default function LogScreen() {
       {dayEntries.length === 0 ? <AppText variant="secondary" color={theme.colors.textSecondary}>{t('log.mealEmpty')}</AppText> : null}
       {dayEntries.map((entry) => (
         <Card key={entry.id}>
-          <AppText>{entry.name}</AppText>
+          <AppText>{entryDisplayName(entry, locale)}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary}>
             {t('log.entryDetail', { grams: formatAmount(entry.grams), kcal: formatKcal(displayKcal(entry.kcal)), fiber: formatFiber(entry.fiberG) })}
           </AppText>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
             <SecondaryButton label={t('common.edit')} onPress={() => openEdit(entry)} />
-            <Pressable accessibilityRole="button" accessibilityLabel={t('log.deleteLabel', { name: entry.name })} onPress={() => remove(entry)} style={{ minHeight: theme.sizes.minTouchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('log.deleteLabel', { name: entryDisplayName(entry, locale) })} onPress={() => remove(entry)} style={{ minHeight: theme.sizes.minTouchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing.sm }}>
               <Trash2 color={theme.colors.warningText} size={icons.md} />
             </Pressable>
           </View>
@@ -474,7 +476,7 @@ export default function LogScreen() {
       {undo ? (
         <Snackbar
           testID="undo-snackbar"
-          message={t('log.removed', { name: undo.entry.name })}
+          message={t('log.removed', { name: entryDisplayName(undo.entry, locale) })}
           actionLabel={t('common.undo')}
           onAction={async () => { await restoreLog(undo.entry, undo.index); setUndo(null); }}
           onHold={() => setUndoHeld(true)}

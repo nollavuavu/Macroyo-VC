@@ -23,6 +23,8 @@ export interface Food {
   fiberPer100g: number | null;
   source?: string;
   fdcId?: number;
+  /** Translated names from the catalog (`name_vi`, `name_fi`). Missing or empty means "use `name`". `name` is always English. */
+  names: Partial<Record<Exclude<Locale, 'en'>, string>>;
   tokens: string[];
 }
 
@@ -100,6 +102,11 @@ export function parseFoods(input: unknown): Food[] {
     const servingLabel = readString(record, ['serving_label', 'serving']);
     const source = readString(record, ['source']);
     const fdc = readNumber(record, ['fdc_id']);
+    const names: Food['names'] = {};
+    const nameVi = readString(record, ['name_vi']);
+    const nameFi = readString(record, ['name_fi']);
+    if (nameVi) names.vi = nameVi;
+    if (nameFi) names.fi = nameFi;
     foods.push({
       id,
       name,
@@ -114,6 +121,7 @@ export function parseFoods(input: unknown): Food[] {
       fiberPer100g: fiber === undefined ? null : fiber,
       source,
       fdcId: fdc,
+      names,
       tokens: tokenize(name),
     });
   }
@@ -125,6 +133,14 @@ let cached: Food[] | null = null;
 export function loadFoods(): Food[] {
   if (!cached) cached = parseFoods(rawFoods);
   return cached;
+}
+
+let cachedById: ReadonlyMap<string, Food> | null = null;
+
+/** The catalog keyed by id, built once. Used to show a logged entry's name in the current language. */
+export function loadFoodsById(): ReadonlyMap<string, Food> {
+  if (!cachedById) cachedById = new Map(loadFoods().map((food) => [food.id, food]));
+  return cachedById;
 }
 
 function normalizePhrase(value: string): string {
