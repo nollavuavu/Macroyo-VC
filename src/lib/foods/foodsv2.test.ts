@@ -112,6 +112,33 @@ describe('foods_v2_i18n translations', () => {
     }
   });
 
+  it("applies Nacho's vi review: 44 of the 53 rows hold name_vi_new, the 9 intentional-English rows keep the English name", () => {
+    const csv = join(__dirname, '../../../../foods_v2_i18n_vi_review.csv');
+    if (!existsSync(csv)) return;
+    const lines = readFileSync(csv, 'utf8').replace(/^\ufeff/, '').split('\n').slice(1).filter(Boolean);
+    expect(lines.length).toBe(53);
+    const byId = new Map(raw.map((row) => [String(row.id), row]));
+    const english = new Set(['108', '166', '377', '651', '680', '869', '901', '1047', '1048']);
+    let applied = 0;
+    for (const line of lines) {
+      const id = line.split(',')[0];
+      const row = byId.get(id)!;
+      if (english.has(id)) {
+        expect(row.name_vi, id).toBe(row.name);
+      } else {
+        applied += 1;
+        expect(line, id).toContain(row.name_vi);
+      }
+    }
+    expect(applied).toBe(44);
+  });
+
+  it('keeps the patty fix (id 23) and the corrected hearts-of-palm spelling (id 1013)', () => {
+    const byId = new Map(raw.map((row) => [row.id, row]));
+    expect(byId.get(23)!.name_vi).toBe('Miếng bò xay (patty) 85% nạc, nướng');
+    expect(byId.get(1013)!.name_vi).toBe('Củ hủ dừa (hearts of palm), sống');
+  });
+
   it('is the v2 catalog plus names: same ids in the same order, same English names and macros as the v2 source file', () => {
     const v2 = join(__dirname, '../../../../foods_v2.json');
     if (!existsSync(v2)) return; // the source file lives outside the repo; skip where it is absent
