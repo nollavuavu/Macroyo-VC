@@ -63,6 +63,37 @@ describe('accent-insensitive search in Vietnamese', () => {
     expect(ids).toContain('1335');
     expect(ids).toContain('1336');
   });
+
+  it('searches "pho", "phở" and "banh mi" return Vietnamese dishes, including the Open Food Facts rows', () => {
+    const phoIds = new Set(['1335', '1336', '1801', '1802', '1803', '1804', '1806']);
+    for (const query of ['pho', 'phở']) {
+      for (const locale of ['en', 'vi'] as const) {
+        const hits = searchFoods(foods, query, 50, locale);
+        const ids = hits.map((food) => food.id);
+        const namesFound = hits.map((food) => foodName(food, locale));
+        expect(namesFound.some((name) => /phở|pho/i.test(name)), `${query} ${locale}`).toBe(true);
+        expect(ids.some((id) => phoIds.has(id)), `${query} ${locale} ids=${ids.slice(0, 10)}`).toBe(true);
+        // New OFF dishes must show up for at least one of these queries in Vietnamese.
+        if (locale === 'vi') expect(ids.some((id) => ['1801', '1802', '1803', '1804', '1806'].includes(id)), `${query} ${locale} off`).toBe(true);
+      }
+    }
+    const banhMiIds = new Set(['1809', '1810', '1811', '1812', '1813']);
+    for (const query of ['banh mi', 'bánh mì']) {
+      for (const locale of ['en', 'vi'] as const) {
+        const hits = searchFoods(foods, query, 50, locale);
+        const ids = hits.map((food) => food.id);
+        const namesFound = hits.map((food) => foodName(food, locale));
+        expect(namesFound.some((name) => /bánh mì|banh mi/i.test(name)), `${query} ${locale}`).toBe(true);
+        expect(ids.some((id) => banhMiIds.has(id)), `${query} ${locale} ids=${ids.slice(0, 10)}`).toBe(true);
+      }
+    }
+    // 'bun' / 'bún' should find the new bún dishes (cha, bò Huế), not only bao buns.
+    for (const query of ['bun', 'bún']) {
+      const hits = searchFoods(foods, query, 50, 'vi');
+      const ids = hits.map((food) => food.id);
+      expect(ids.some((id) => ['1815', '1816', '1817'].includes(id)), query).toBe(true);
+    }
+  });
 });
 
 describe('accent-insensitive search in Finnish', () => {
@@ -113,8 +144,10 @@ describe('English always matches, in all three languages', () => {
     expect(searchFoods(rows, 'tofu', 5, 'fi')).toHaveLength(1);
   });
 
-  it('does not match the other language: Vietnamese words find nothing in English mode', () => {
-    expect(names('banh mi', 'en')).toEqual([]);
+  it('does not match the other language: a Vietnamese-only spelling finds nothing in English mode', () => {
+    // 'thit xong khoi' is only in the Vietnamese name. 'banh mi' is no longer a valid example:
+    // the Open Food Facts rows use "banh mi" in the English name.
+    expect(names('thit xong khoi', 'en')).toEqual([]);
   });
 });
 

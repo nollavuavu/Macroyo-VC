@@ -52,6 +52,15 @@ describe('serving labels: units and numbers', () => {
     expect(fi('1 dl')).toBe('1 dl');
     expect(vi('1 pakora')).toBe('1 bánh pakora');
     expect(fi('1 pakora')).toBe('1 pakora');
+    expect(vi('1 pack')).toBe('1 gói');
+    expect(fi('1 pack')).toBe('1 pakkaus');
+    expect(vi('1 bun')).toBe('1 bánh');
+    expect(fi('1 bun')).toBe('1 sämpylä');
+    expect(vi('1 plate')).toBe('1 đĩa');
+    expect(fi('1 plate')).toBe('1 lautanen');
+    expect(vi('1 sachet')).toBe('1 gói');
+    expect(fi('1 sachet')).toBe('1 pussi');
+    expect(vi('1 bottle')).toBe('1 chai');
   });
 });
 

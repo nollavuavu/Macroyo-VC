@@ -46,8 +46,16 @@ describe('QA-19: search and language copy matches the behaviour', () => {
       const hits = searchFoods(foods, example!, 5000, lang);
       expect(hits.length, `${lang} "${example}"`).toBeGreaterThan(0);
       expect(hits.some((food) => foodName(food, lang).toLowerCase().includes(example!.toLowerCase())), lang).toBe(true);
-      // the same example does not rely on the English name
-      expect(hits.some((food) => food.name.toLowerCase().includes(example!.toLowerCase())), lang).toBe(false);
+      // The example must still match a translated name, not only an English name that happens to
+      // contain the same letters (Open Food Facts rows use "bánh mì" in the English name).
+      expect(
+        hits.some((food) => {
+          const shown = foodName(food, lang).toLowerCase();
+          const english = food.name.toLowerCase();
+          return shown.includes(example!.toLowerCase()) && !english.includes(example!.toLowerCase());
+        }),
+        lang,
+      ).toBe(true);
     }
     // the English example still works in English
     expect(searchFoods(foods, 'baked bacon', 50, 'en').some((food) => food.name === 'Bacon, baked')).toBe(true);

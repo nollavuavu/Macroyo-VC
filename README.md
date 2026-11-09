@@ -19,7 +19,7 @@ The first launch is onboarding. After that, data stays in SQLite on iOS and Andr
 
 ## Food file
 
-`assets/foods.json` is the catalog (622 USDA foods). Swap the file and keep the loader at `src/lib/foods/foods.ts`. The loader accepts this shape and a few aliases (`kcal` / `calories`, `protein` / `protein_g`, and the same idea for carbs, fat, and fiber). Invalid rows are skipped. Fiber may be `null`; that is unknown, not zero.
+`assets/foods.json` is the catalog (USDA, Fineli, and Open Food Facts). Swap the file and keep the loader at `src/lib/foods/foods.ts`. Source licences and required attribution, including the Open Food Facts ODbL 1.0 notice, are in `FOOD_SOURCES.md`. The loader accepts this shape and a few aliases (`kcal` / `calories`, `protein` / `protein_g`, and the same idea for carbs, fat, and fiber). Invalid rows are skipped. Fiber may be `null`; that is unknown, not zero.
 
 ```json
 [

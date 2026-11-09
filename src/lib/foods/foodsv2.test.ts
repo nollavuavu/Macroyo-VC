@@ -13,7 +13,7 @@ const COLUMNS = [
   'kcal_per_100g', 'name', 'name_fi', 'name_vi', 'protein_per_100g',
   'serving_label', 'serving_size_g', 'source',
 ];
-const SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS', 'Fineli (THL)']);
+const SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS', 'Fineli (THL)', 'Open Food Facts']);
 const V2_SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS']);
 const V2_PREFIX = 1555;
 const CATEGORIES = new Set([
@@ -22,8 +22,8 @@ const CATEGORIES = new Set([
 ]);
 
 describe('foods_v3 schema', () => {
-  it('has at least 1,800 rows with exactly the 14 expected columns (review and source_ref metadata are not bundled)', () => {
-    expect(raw.length).toBeGreaterThanOrEqual(1800);
+  it('has at least 1,824 rows with exactly the 14 expected columns (review and source_ref metadata are not bundled)', () => {
+    expect(raw.length).toBeGreaterThanOrEqual(1824);
     for (const row of raw) expect(Object.keys(row).sort()).toEqual(COLUMNS);
   });
 
@@ -37,7 +37,7 @@ describe('foods_v3 schema', () => {
     expect(new Set(raw.map((row) => row.fdc_id)).size).toBe(raw.length);
   });
 
-  it('uses only allowed sources and categories, and all four sources appear', () => {
+  it('uses only allowed sources and categories, and all five sources appear', () => {
     for (const row of raw) {
       expect(SOURCES.has(row.source as string), `${row.id} ${row.source}`).toBe(true);
       expect(CATEGORIES.has(row.category as string), `${row.id} ${row.category}`).toBe(true);
@@ -66,11 +66,16 @@ describe('foods_v3 schema', () => {
     expect(raw.filter((row) => row.serving_label === '1 serving' || row.serving_size_g === 100).length).toBeGreaterThan(0);
   });
 
-  it('keeps ids 1 to 622 as in v1 and keeps food names in English (ASCII plus a few accents)', () => {
+  it('keeps ids 1 to 622 as in v1 and keeps food names in English (ASCII plus a few accents on the v2/v3 prefix)', () => {
     expect(raw[0].name).toBe('Bacon, baked');
     expect(raw[621].name).toBe('Egg drop soup');
     expect(raw[622].id).toBe(623);
-    for (const row of raw) expect(/^[\x20-\x7e\u00c0-\u017f]+$/.test(row.name as string), `${row.id} ${row.name}`).toBe(true);
+    // Prefix names stay English (ASCII plus Latin-1/Latin Extended-A). Open Food Facts rows may
+    // include Vietnamese in parentheses in the English name, e.g. "Chicken pho, as served (phở gà)".
+    for (const row of raw.slice(0, 1800)) expect(/^[\x20-\x7e\u00c0-\u017f]+$/.test(row.name as string), `${row.id} ${row.name}`).toBe(true);
+    const off = raw.filter((row) => row.source === 'Open Food Facts');
+    expect(off.length).toBeGreaterThanOrEqual(24);
+    for (const row of off) expect((row.name as string).trim(), `${row.id}`).not.toBe('');
   });
 
   it('parses every row (the loader drops none)', () => {

@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { formatFiber, loadFoods, matchRank, parseFoods, searchFoods } from './foods';
 
 describe('food loader', () => {
-  it('loads the catalog (v3: at least 1,800 foods), including the v2 egg foods and later Fineli rows', () => {
+  it('loads the catalog (v3: at least 1,824 foods), including the v2 egg foods, Fineli rows and Open Food Facts dishes', () => {
     const foods = loadFoods();
-    expect(foods.length).toBeGreaterThanOrEqual(1800);
+    expect(foods.length).toBeGreaterThanOrEqual(1824);
     expect(foods.find((food) => food.id === '1')?.name).toBe('Bacon, baked');
     expect(foods.find((food) => food.id === '622')?.name).toBe('Egg drop soup');
     expect(foods.find((food) => food.name === 'Quail egg, raw')).toBeTruthy();
     expect(foods.some((food) => food.source === 'Fineli (THL)')).toBe(true);
+    expect(foods.some((food) => food.source === 'Open Food Facts')).toBe(true);
   });
 
   it('keeps null fiber distinct from zero', () => {
