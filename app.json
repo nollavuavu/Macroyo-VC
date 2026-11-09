@@ -3,7 +3,7 @@
     "name": "Macroyo",
     "slug": "macroyo",
     "scheme": "macroyo",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.macroyo.app",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +31,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash.png",
-          "imageWidth": 380,
+          "imageWidth": 288,
           "resizeMode": "contain",
           "backgroundColor": "#FBF1E1",
           "dark": {
