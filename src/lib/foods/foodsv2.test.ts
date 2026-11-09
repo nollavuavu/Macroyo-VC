@@ -5,7 +5,7 @@ import { SEARCH_PAGE_SIZE, loadFoods, searchFoods, tokenize } from './foods';
 import { foodName } from './names';
 import { entryFromPer100 } from '../logging';
 
-/** foods_v2.json schema check, run on the raw asset so a bad swap fails before the parser can hide it. */
+/** Catalog schema check, run on the raw asset so a bad swap fails before the parser can hide it. */
 const raw = JSON.parse(readFileSync(join(__dirname, '../../../assets/foods.json'), 'utf8')) as Record<string, unknown>[];
 
 const COLUMNS = [
@@ -13,30 +13,37 @@ const COLUMNS = [
   'kcal_per_100g', 'name', 'name_fi', 'name_vi', 'protein_per_100g',
   'serving_label', 'serving_size_g', 'source',
 ];
-const SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS']);
+const SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS', 'Fineli (THL)']);
+const V2_SOURCES = new Set(['USDA FDC SR Legacy', 'USDA FDC Foundation', 'USDA FDC FNDDS']);
+const V2_PREFIX = 1555;
 const CATEGORIES = new Set([
   'meat', 'seafood', 'eggs', 'dairy', 'grains', 'legumes', 'nuts', 'fruit', 'vegetables', 'snacks', 'beverages',
   'prepared dishes', 'fast food', 'fats & oils', 'condiments', 'sweets',
 ]);
 
-describe('foods_v2 schema', () => {
-  it('has 1,555 rows with exactly the 14 expected columns (12 v2 columns plus name_vi, name_fi; review metadata is not bundled)', () => {
-    expect(raw).toHaveLength(1555);
+describe('foods_v3 schema', () => {
+  it('has at least 1,800 rows with exactly the 14 expected columns (review and source_ref metadata are not bundled)', () => {
+    expect(raw.length).toBeGreaterThanOrEqual(1800);
     for (const row of raw) expect(Object.keys(row).sort()).toEqual(COLUMNS);
   });
 
-  it('has sequential unique ids, unique names and unique FDC ids', () => {
+  it('has sequential unique ids, a non-empty English name on every row, unique names and unique FDC ids', () => {
     raw.forEach((row, index) => expect(row.id).toBe(index + 1));
+    for (const row of raw) {
+      expect(typeof row.name, `${row.id}`).toBe('string');
+      expect((row.name as string).trim(), `${row.id}`).not.toBe('');
+    }
     expect(new Set(raw.map((row) => row.name)).size).toBe(raw.length);
     expect(new Set(raw.map((row) => row.fdc_id)).size).toBe(raw.length);
   });
 
-  it('uses only allowed sources and categories, and all three sources appear', () => {
+  it('uses only allowed sources and categories, and all four sources appear', () => {
     for (const row of raw) {
       expect(SOURCES.has(row.source as string), `${row.id} ${row.source}`).toBe(true);
       expect(CATEGORIES.has(row.category as string), `${row.id} ${row.category}`).toBe(true);
     }
     expect(new Set(raw.map((row) => row.source))).toEqual(SOURCES);
+    expect(raw.slice(0, V2_PREFIX).every((row) => V2_SOURCES.has(row.source as string))).toBe(true);
   });
 
   it('has finite non-negative macros; fiber is null or non-negative', () => {
@@ -71,7 +78,7 @@ describe('foods_v2 schema', () => {
   });
 });
 
-describe('foods_v2_i18n translations', () => {
+describe('foods_v3_i18n translations', () => {
   it('has name_vi and name_fi strings on every row: trimmed, NFC, and empty or equal to English where there is no local name', () => {
     for (const row of raw) {
       for (const key of ['name_vi', 'name_fi'] as const) {
@@ -98,8 +105,10 @@ describe('foods_v2_i18n translations', () => {
     }
   });
 
-  it('every row listed in foods_v2_i18n_english_fallback.csv has the English name in that language', () => {
-    const csv = join(__dirname, '../../../../foods_v2_i18n_english_fallback.csv');
+  it('every row listed in the v3 (or v2) English-fallback CSV has the English name in that language', () => {
+    const v3 = join(__dirname, '../../../../foods_v3_i18n_english_fallback.csv');
+    const v2 = join(__dirname, '../../../../foods_v2_i18n_english_fallback.csv');
+    const csv = existsSync(v3) ? v3 : v2;
     if (!existsSync(csv)) return;
     const lines = readFileSync(csv, 'utf8').replace(/^\ufeff/, '').split('\n').slice(1).filter(Boolean);
     expect(lines.length).toBeGreaterThan(100);
@@ -142,18 +151,33 @@ describe('foods_v2_i18n translations', () => {
     expect(byId.get(1013)!.name_vi).toBe('Củ hũ dừa (hearts of palm), sống');
   });
 
-  it('is the v2 catalog plus names: same ids in the same order, same English names and macros as the v2 source file', () => {
+  it('keeps the v2 catalog as a prefix: same ids in the same order, same English names and macros, then additional v3 rows', () => {
     const v2 = join(__dirname, '../../../../foods_v2.json');
     if (!existsSync(v2)) return; // the source file lives outside the repo; skip where it is absent
     const source = JSON.parse(readFileSync(v2, 'utf8')) as Record<string, unknown>[];
-    expect(raw.map((row) => row.id)).toEqual(source.map((row) => row.id));
+    expect(source).toHaveLength(V2_PREFIX);
+    expect(raw.length).toBeGreaterThan(source.length);
+    expect(raw.slice(0, source.length).map((row) => row.id)).toEqual(source.map((row) => row.id));
     for (const [index, row] of source.entries()) {
       for (const key of Object.keys(row)) expect(raw[index][key], `${row.id} ${key}`).toEqual(row[key]);
     }
   });
+
+  it('shows vi and fi names for new v3 rows when those locales are set', () => {
+    const foods = loadFoods();
+    const pho = foods.find((item) => item.id === '1335')!;
+    expect(foodName(pho, 'en')).toBe('Pho with meat (Vietnamese beef noodle soup)');
+    expect(foodName(pho, 'vi')).toBe('Phở bò');
+    expect(foodName(pho, 'fi')).toMatch(/phở/i);
+    const reindeer = foods.find((item) => item.id === '1561')!;
+    expect(foodName(reindeer, 'en')).toBe('Reindeer, raw');
+    expect(foodName(reindeer, 'vi')).toBe('Thịt tuần lộc, sống');
+    expect(foodName(reindeer, 'fi')).toBe('Poronliha');
+    expect(reindeer.source).toBe('Fineli (THL)');
+  });
 });
 
-describe('search at 1,555 rows', () => {
+describe('search at the full catalog size', () => {
   const foods = loadFoods();
 
   it('caps every query at the page size and keeps the best matches first', () => {

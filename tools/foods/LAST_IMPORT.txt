@@ -1,0 +1,6 @@
+1800 rows written to /workspace/macro-app/app-release-yo-foods/assets/foods.json
+source: /workspace/macro-app/foods_v3_i18n.json
+source sha256: 39caca7785948aeed31602f547771d0e6693e0840b0ef6304a0a462c322c2dd1
+source mtime: 2026-11-09 23:43:55 +0200 (Europe/Helsinki)
+source size: 865050 bytes
+dropped fields: ('needs_review', 'review_note', 'source_ref'); needs_review was true on 44 rows; +245 after the v2 prefix

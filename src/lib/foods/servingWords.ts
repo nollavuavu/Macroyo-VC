@@ -48,6 +48,7 @@ type NounRow = [vi: string, fi: string, fiPart: string, fiPl?: string, fiPartPl?
 
 const NOUN_ROWS: Record<string, NounRow> = {
   serving: ['phần', 'annos', 'annosta', 'annokset', 'annoksia'],
+  portion: ['phần', 'annos', 'annosta', 'annokset', 'annoksia'],
   item: ['cái', 'kpl', 'kpl'],
   slice: ['lát', 'viipale', 'viipaletta', 'viipaleet', 'viipaleita'],
   piece: ['miếng', 'pala', 'palaa', 'palat', 'paloja'],
@@ -62,6 +63,7 @@ const NOUN_ROWS: Record<string, NounRow> = {
   'egg roll': ['chả giò', 'egg roll', 'egg rollia', 'egg rollit', 'egg rolleja'],
   patty: ['miếng patty', 'pihvi', 'pihviä', 'pihvit', 'pihvejä'],
   pattie: ['miếng patty', 'pihvi', 'pihviä', 'pihvit', 'pihvejä'],
+  pakora: ['bánh pakora', 'pakora', 'pakoraa', 'pakorat', 'pakoroja'],
   roll: ['cuốn', 'rulla', 'rullaa', 'rullat', 'rullia'],
   fruit: ['quả', 'hedelmä', 'hedelmää', 'hedelmät', 'hedelmiä'],
   cookie: ['bánh quy', 'keksi', 'keksiä', 'keksit', 'keksejä'],
@@ -181,10 +183,11 @@ const NOUN_ROWS: Record<string, NounRow> = {
   'fl oz': ['fl oz', 'fl oz', 'fl oz', 'fl oz', 'fl oz'],
   g: ['g', 'g', 'g', 'g', 'g'],
   ml: ['ml', 'ml', 'ml', 'ml', 'ml'],
+  dl: ['dl', 'dl', 'dl', 'dl', 'dl'],
 };
 
 /** Nouns that are measures: a noun right after them is the thing measured. */
-const MEASURES = new Set(['cup', 'tablespoon', 'teaspoon', 'oz', 'fl oz', 'g', 'ml', 'piece', 'slice']);
+const MEASURES = new Set(['cup', 'tablespoon', 'teaspoon', 'oz', 'fl oz', 'g', 'ml', 'dl', 'piece', 'slice']);
 
 /** English plural or variant spellings that map to a row above. */
 const PLURAL_OF: Record<string, string> = {

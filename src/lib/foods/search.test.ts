@@ -53,6 +53,16 @@ describe('accent-insensitive search in Vietnamese', () => {
     expect(names('bacon baked', 'vi', 5)).toContain('Thịt xông khói, nướng lò');
     expect(names('thit xong khoi', 'vi', 5)).toContain('Thịt xông khói, nướng lò');
   });
+
+  it("accent-insensitive 'pho' finds Phở", () => {
+    for (const query of ['pho', 'phở', 'PHO', 'Pho']) {
+      const found = names(query, 'vi', 25);
+      expect(found.some((name) => name.includes('Phở')), query).toBe(true);
+    }
+    const ids = searchFoods(foods, 'pho', 25, 'vi').map((food) => food.id);
+    expect(ids).toContain('1335');
+    expect(ids).toContain('1336');
+  });
 });
 
 describe('accent-insensitive search in Finnish', () => {
@@ -66,6 +76,15 @@ describe('accent-insensitive search in Finnish', () => {
   it('finds Finnish names and English names in Finnish mode', () => {
     expect(names('kaali', 'fi', 10).some((name) => name.startsWith('Kaali'))).toBe(true);
     expect(names('chicken', 'fi', 100).length).toBeGreaterThan(10);
+  });
+
+  it('finds Fineli foods by their Finnish names, with or without accents', () => {
+    const reindeer = names('poronliha', 'fi', 25);
+    expect(reindeer.some((name) => name.toLowerCase().includes('poronliha'))).toBe(true);
+    expect(names('silakka', 'fi', 25).some((name) => name.toLowerCase().includes('silakka'))).toBe(true);
+    expect(names('PORONLIHA', 'fi', 25)).toEqual(names('poronliha', 'fi', 25));
+    // English query still works in Finnish mode.
+    expect(searchFoods(foods, 'reindeer', 25, 'fi').some((food) => food.name.toLowerCase().includes('reindeer'))).toBe(true);
   });
 });
 
@@ -221,7 +240,7 @@ describe('regional Vietnamese synonyms', () => {
 });
 
 describe('performance', () => {
-  it('precomputes keys: 1,555 foods x 3 languages, then 300 searches in well under a second', () => {
+  it('precomputes keys: the full catalog x 3 languages, then 300 searches in well under a second', () => {
     for (const locale of ['en', 'vi', 'fi'] as const) warmSearchIndex(foods, locale);
     const queries = ['banh mi', 'chicken', 'sữa', 'kaali', 'rice', 'dưa leo', 'x', 'thom'];
     const started = Date.now();

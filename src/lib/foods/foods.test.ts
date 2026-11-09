@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { formatFiber, loadFoods, matchRank, parseFoods, searchFoods } from './foods';
 
 describe('food loader', () => {
-  it('loads the USDA catalog (v2: 1,555 foods), including the added egg foods', () => {
+  it('loads the catalog (v3: at least 1,800 foods), including the v2 egg foods and later Fineli rows', () => {
     const foods = loadFoods();
-    expect(foods.length).toBe(1555);
+    expect(foods.length).toBeGreaterThanOrEqual(1800);
     expect(foods.find((food) => food.id === '1')?.name).toBe('Bacon, baked');
     expect(foods.find((food) => food.id === '622')?.name).toBe('Egg drop soup');
     expect(foods.find((food) => food.name === 'Quail egg, raw')).toBeTruthy();
+    expect(foods.some((food) => food.source === 'Fineli (THL)')).toBe(true);
   });
 
   it('keeps null fiber distinct from zero', () => {

@@ -40,6 +40,19 @@ describe('serving labels: units and numbers', () => {
     expect(fi('1/2 slice')).toBe('1/2 viipaletta');
     expect(vi('1 cup (1/2" slices)')).toBe('1 cốc (1/2" lát)');
   });
+
+  it('translates v3 catalog labels: portion, dl and pakora', () => {
+    expect(vi('1 medium portion')).toBe('1 phần vừa');
+    expect(fi('1 medium portion')).toBe('1 keskikokoinen annos');
+    expect(vi('1 small portion')).toBe('1 phần nhỏ');
+    expect(fi('1 small portion')).toBe('1 pieni annos');
+    expect(vi('1 medium piece')).toBe('1 miếng vừa');
+    expect(fi('1 medium piece')).toBe('1 keskikokoinen pala');
+    expect(vi('1 dl')).toBe('1 dl');
+    expect(fi('1 dl')).toBe('1 dl');
+    expect(vi('1 pakora')).toBe('1 bánh pakora');
+    expect(fi('1 pakora')).toBe('1 pakora');
+  });
 });
 
 describe('serving labels: Finnish number agreement', () => {

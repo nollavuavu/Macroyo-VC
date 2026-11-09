@@ -3,7 +3,7 @@
     "name": "Macroyo",
     "slug": "macroyo",
     "scheme": "macroyo",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FBF1E1"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.macroyo.app",
+      "versionCode": 3
     },
     "web": {
       "bundler": "metro",
